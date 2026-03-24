@@ -2,146 +2,69 @@
 
 ## Flux d'un achat de billet
 
-```
-Client HTTP
-    │
-    ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  COUCHE FRONTALE                        Port :80                     │
-│                                                                      │
-│   ┌──────────────┐       ┌──────────────┐                           │
-│   │    nginx     │       │ nginx-replica│   Rate Limiting 10 req/s  │
-│   │  (actif)     │       │  (standby)   │   Reverse Proxy /api/*    │
-│   └──────┬───────┘       └──────────────┘   Static → frontend       │
-│          │                                                           │
-│   ┌──────┴───────┐       ┌──────────────┐                           │
-│   │  frontend    │       │  frontend    │   SPA React/Vue           │
-│   │  (actif)     │       │  -replica    │   servi par Nginx          │
-│   └──────────────┘       └──────────────┘                           │
-└──────────────────────────────┬───────────────────────────────────────┘
-                               │  /api/*  →  strip /api  →  /
-                               ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  API GATEWAY (JWT + Routing)                                         │
-│                                                                      │
-│   ┌─────────────────┐       ┌─────────────────────┐                 │
-│   │   api-gateway   │       │ api-gateway-replica │                 │
-│   │  (actif)        │       │  (standby)          │                 │
-│   │  JWT Validation │       │  JWT Validation     │                 │
-│   │  Role-Based AC  │       │  Role-Based AC      │                 │
-│   │  Rate Limiting  │       │  Rate Limiting      │                 │
-│   └────────┬────────┘       └─────────────────────┘                 │
-└────────────┼─────────────────────────────────────────────────────────┘
-             │
-     ┌───────┼───────────────────────────────┐
-     │       │                               │
-     ▼       ▼                               ▼
-  /auth   /events                       /bookings (async RabbitMQ)
-  /users  /tickets                      /payments
-          /notifications                ...
-             │
-             ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  COUCHE SERVICES (6 x 2 réplicas)                                    │
-│                                                                      │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                  │
-│  │auth-service │  │user-service │  │event-service│                  │
-│  │    :3004    │  │    :3001    │  │    :3006    │                  │
-│  │   replica   │  │   replica   │  │   replica   │                  │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘                  │
-│         │                │                │                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                  │
-│  │   booking   │  │   payment   │  │notification │                  │
-│  │  -service   │  │  -service   │  │  -service   │                  │
-│  │    :3003    │  │    :3005    │  │    :3002    │                  │
-│  │   replica   │  │   replica   │  │   replica   │                  │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘                  │
-│         │                │                │                          │
-│         │   ┌────────────┼──────┐         │                         │
-│         │   │            │      │         │                         │
-│         ▼   ▼            │      ▼         │                         │
-│    ┌─────────┐           │  ┌─────────┐   │                         │
-│    │  Redis  │           │  │RabbitMQ │◄──┘                         │
-│    │  :6379  │           │  │  :5672  │                             │
-│    │ (cache) │           │  │  async  │                             │
-│    │ (locks) │           │  │  queue  │                             │
-│    └─────────┘           │  └─────────┘                             │
-└──────────────────────────┼──────────────────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  COUCHE PROXY DB — PgBouncer (1 par silo)   Port :6432              │
-│                                                                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
-│  │auth-pgbouncer│  │user-pgbouncer│  │event-pgbouncer│              │
-│  │pool=20 tx    │  │pool=20 tx    │  │pool=20 tx    │               │
-│  │max=200 conn  │  │max=200 conn  │  │max=200 conn  │               │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘               │
-│         │                 │                 │                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
-│  │booking-      │  │payment-      │  │notif-        │               │
-│  │pgbouncer     │  │pgbouncer     │  │pgbouncer     │               │
-│  │pool=20 tx    │  │pool=20 tx    │  │pool=20 tx    │               │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘               │
-└─────────┼─────────────────┼─────────────────┼────────────────────────┘
-          │                 │                 │
-    ┌─────┘           ┌─────┘           ┌─────┘
-    ▼                 ▼                 ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  COUCHE BASE DE DONNÉES                                              │
-│                                                                      │
-│  ── Silos STANDARD (Bitnami PostgreSQL 16 master/slave) ──          │
-│                                                                      │
-│  ┌──────────────────────┐   ┌──────────────────────┐                │
-│  │   auth-db (master)   │   │  auth-db-replica     │                │
-│  │  WAL streaming ──────┼──►│  (slave, read-only)  │                │
-│  └──────────────────────┘   └──────────────────────┘                │
-│                                                                      │
-│  ┌──────────────────────┐   ┌──────────────────────┐                │
-│  │   user-db (master)   │   │  user-db-replica     │                │
-│  │  WAL streaming ──────┼──►│  (slave, read-only)  │                │
-│  └──────────────────────┘   └──────────────────────┘                │
-│                                                                      │
-│  ┌──────────────────────┐   ┌──────────────────────┐                │
-│  │  event-db (master)   │   │  event-db-replica    │                │
-│  │  WAL streaming ──────┼──►│  (slave, read-only)  │                │
-│  └──────────────────────┘   └──────────────────────┘                │
-│                                                                      │
-│  ┌──────────────────────┐   ┌──────────────────────┐                │
-│  │  notif-db (master)   │   │  notif-db-replica    │                │
-│  │  WAL streaming ──────┼──►│  (slave, read-only)  │                │
-│  └──────────────────────┘   └──────────────────────┘                │
-│                                                                      │
-│  ── Silos CRITIQUES (Patroni HA — 3 nœuds) ──                       │
-│                                                                      │
-│  CLUSTER BOOKING                      CLUSTER PAYMENT               │
-│  ┌────────────┐                       ┌────────────┐                │
-│  │booking-db-1│◄─ leader (prio:100)   │payment-db-1│◄─ leader       │
-│  │  :5432     │                       │  :5432     │   (prio:100)   │
-│  │  :8008 REST│                       │  :8008 REST│                │
-│  └─────┬──────┘                       └─────┬──────┘                │
-│        │ WAL streaming                      │ WAL streaming          │
-│  ┌─────┴──────┐  ┌────────────┐       ┌─────┴──────┐  ┌───────────┐ │
-│  │booking-db-2│  │booking-db-3│       │payment-db-2│  │payment-db-3│ │
-│  │ (replica)  │  │ (replica)  │       │ (replica)  │  │ (replica) │ │
-│  └────────────┘  └────────────┘       └────────────┘  └───────────┘ │
-│                                                                      │
-│  ── Consensus ETCD (3 nœuds) — utilisé par Patroni ──               │
-│  ┌──────────┐     ┌──────────┐     ┌──────────┐                     │
-│  │  etcd-1  │◄───►│  etcd-2  │◄───►│  etcd-3  │                     │
-│  │  :2379   │     │  :2379   │     │  :2379   │                     │
-│  │  :2380   │     │  :2380   │     │  :2380   │                     │
-│  └──────────┘     └──────────┘     └──────────┘                     │
-└──────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    User((Utilisateur)) --> N[Nginx Frontal]
+    
+    subgraph "Couche Présentation"
+        N --> FE[Frontend SPA]
+        N -- "/api" --> GWLB[Gateway LB]
+        GWLB --> GW[API Gateway Replicas]
+    end
 
-┌──────────────────────────────────────────────────────────────────────┐
-│  OBSERVABILITÉ & MAINTENANCE                                         │
-│                                                                      │
-│  ┌──────────────────┐    ┌──────────────────────────────────────┐   │
-│  │  zipkin  :9411   │    │  cron-backup                         │   │
-│  │  Tracing distribué│   │  Simulation backup payment_db / 6h   │   │
-│  └──────────────────┘    └──────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────────┘
+    subgraph "Load Balancers Internes"
+        GW --> ALB[Auth LB]
+        GW --> ULB[User LB]
+        GW --> ELB[Event LB]
+        GW --> BLB[Booking LB]
+        GW --> PLB[Payment LB]
+    end
+
+    subgraph "Microservices (Logique Métier)"
+        ALB --> AS[Auth Service Replicas]
+        ULB --> US[User Service Replicas]
+        ELB --> ES[Event Service Replicas]
+        BLB --> BS[Booking Service Replicas]
+        PLB --> PS[Payment Service Replicas]
+        GW -.-> NS[Notification Service]
+    end
+
+    subgraph "Infrastructure Partagée"
+        RMQ[RabbitMQ Broker]
+        RED[Redis Cache]
+        ZIP[Zipkin Tracing]
+    end
+
+    subgraph "Silos de Données (Patroni / Slave)"
+        subgraph "Silos Critiques (HA)"
+            BS --> RED
+            BDB[(Booking Cluster Patroni)]
+            PDB[(Payment Cluster Patroni)]
+            ETC{ETCD Cluster}
+            BDB & PDB --- ETC
+        end
+        
+        subgraph "Silos Standards"
+            ADB[(Auth DB Slave)]
+            UDB[(User DB Slave)]
+            EDB[(Event DB Slave)]
+            NDB[(Notif DB Slave)]
+        end
+        
+        PGB[PgBouncer Layer]
+    end
+
+    %% Connexions Logical
+    AS & US & ES & BS & PS & NS --- PGB
+    PGB --- ADB & UDB & EDB & NDB & BDB & PDB
+    
+    PS -- "Queue" --> RMQ
+    RMQ -- "Sync" --> BS & ES
+    
+    %% Observabilité
+    AS & US & ES & BS & PS & NS -.-> ZIP
+```
+
 ```
 
 ---
@@ -271,6 +194,12 @@ Latence < 1ms vs. ~5ms PostgreSQL. Garantit qu'on ne vend pas 2 fois le même si
 L'achat est **asynchrone** : l'utilisateur reçoit un `202 Accepted` immédiat.
 Le paiement et la notification s'exécutent en arrière-plan.
 Si Stripe/Twilio est lent, les messages attendent dans RabbitMQ sans bloquer les ventes.
+
+### Pourquoi des Load Balancers Internes (Nginx proxy) ?
+Dans l'architecture `full-infra`, l'API Gateway ne communique plus directement avec les instances `auth-service-replica`. À la place, un container Nginx (`auth-lb`, `user-lb`, etc.) est positionné entre le Gateway et les microservices, utilisant la méthode *Round Robin*. Cela imite la robustesse de Kubernetes (`Services`) et répartit la charge de manière transparente pour le Gateway, qui ignore combien de nœuds sont actifs. L'ensemble des containers utilisent le port commun `3000` via Docker Network, empêchant ainsi tout conflit.
+
+### Pourquoi le `app.set('trust proxy', 1)` ?
+Le projet intègre le module `express-rate-limit` pour limiter les attaques DDoS (10 req/s). Lorsque le proxy Nginx frontal ou un Nginx `lb` transmet la requête, il ajoute des entêtes `X-Forwarded-For`. Express refuse cette information si on ne lui spécifie pas explicitement `trust proxy: 1`. Sans cette option, les requêtes entrantes via Nginx retournaient des erreurs `500 Internal Server Error / Validation`.
 
 ### Note sur la migration Bitnami (août 2025)
 Les images `bitnami/*` ont migré vers `bitnamilegacy/*` (images figées, sans mise à jour)
