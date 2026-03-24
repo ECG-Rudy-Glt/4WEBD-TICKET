@@ -1,0 +1,17 @@
+{
+  "name": "booking-service",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.9",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "ioredis": "^5.6.1",
+    "pg": "^8.18.0",
+    "zod": "^4.3.6"
+  }
+}
