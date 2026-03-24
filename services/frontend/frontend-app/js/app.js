@@ -2,13 +2,27 @@
     const API = 'http://localhost:3030';
     let token = localStorage.getItem('token');
     let currentEventId = null;
+    let currentPage = 'events';
 
     // ── Navigation ────────────────────────────────────────
     window.showPage = function (name) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById('page-' + name).classList.add('active');
+        currentPage = name;
         if (name === 'events')     loadEvents();
         if (name === 'my-tickets') loadMyTickets();
+    };
+
+    // Called by i18n when language changes — reloads dynamic content
+    window.refreshCurrentPage = function () {
+        if (currentPage === 'events')     loadEvents();
+        if (currentPage === 'my-tickets') loadMyTickets();
+        if (currentPage === 'admin') {
+            const payload = getPayload();
+            const isAdmin = payload && payload.role === 'admin';
+            adminLoadEvents();
+            if (isAdmin) adminLoadUsers();
+        }
     };
 
     function getPayload() {
@@ -41,7 +55,7 @@
             } catch (_) {}
             return e.error;
         }
-        return 'Une erreur est survenue.';
+        return t('error_generic');
     }
 
     // ── HTTP helper ───────────────────────────────────────
@@ -65,17 +79,20 @@
         try {
             const result = await api('/events');
             const events = result.data || result;
-            if (!events.length) { list.innerHTML = '<p style="color:#8b949e">Aucun événement disponible.</p>'; return; }
+            if (!events.length) {
+                list.innerHTML = `<p style="color:#8b949e">${t('events_none')}</p>`;
+                return;
+            }
             list.innerHTML = events.map(e => `
                 <div class="card">
                     <h3>${e.title}</h3>
-                    <p>${new Date(e.date).toLocaleString('fr-FR')} — ${e.venue}</p>
-                    <p>${e.availableTickets} place(s) · ${(e.priceInCents / 100).toFixed(2)} €</p>
-                    <button class="btn-secondary" onclick="openBuy(${e.id})">Acheter un billet</button>
+                    <p>${new Date(e.date).toLocaleString(t('date_locale'))} — ${e.venue}</p>
+                    <p>${e.availableTickets} ${t('events_seats')} · ${(e.priceInCents / 100).toFixed(2)} €</p>
+                    <button class="btn-secondary" onclick="openBuy(${e.id})">${t('events_buy_btn')}</button>
                 </div>
             `).join('');
         } catch (e) {
-            list.innerHTML = '<p style="color:#f85149">Erreur de chargement.</p>';
+            list.innerHTML = `<p style="color:#f85149">${t('events_load_error')}</p>`;
         }
     }
 
@@ -86,13 +103,13 @@
             const e = await api('/events/' + eventId);
             document.getElementById('buy-event-info').innerHTML = `
                 <h3>${e.title}</h3>
-                <p>${new Date(e.date).toLocaleString('fr-FR')} — ${e.venue}</p>
-                <p>${(e.priceInCents / 100).toFixed(2)} € / billet</p>
+                <p>${new Date(e.date).toLocaleString(t('date_locale'))} — ${e.venue}</p>
+                <p>${(e.priceInCents / 100).toFixed(2)} € ${t('buy_price_per_ticket')}</p>
             `;
             document.getElementById('buy-msg').innerHTML = '';
             showPage('buy');
         } catch (e) {
-            alert("Impossible de charger l'événement.");
+            alert(t('buy_event_load_error'));
         }
     };
 
@@ -100,7 +117,7 @@
         const qty  = parseInt(document.getElementById('buy-qty').value);
         const card = document.getElementById('buy-card').value.trim();
         if (!card || card.length < 16) {
-            showMsg('buy-msg', 'Numéro de carte invalide (16 chiffres).', false);
+            showMsg('buy-msg', t('buy_card_invalid'), false);
             return;
         }
         try {
@@ -108,7 +125,7 @@
                 method: 'POST',
                 body: JSON.stringify({ eventId: currentEventId, quantity: qty, cardToken: card })
             });
-            showMsg('buy-msg', 'Réservation envoyée ! Vous recevrez une confirmation sous peu.', true);
+            showMsg('buy-msg', t('buy_success'), true);
         } catch (e) {
             showMsg('buy-msg', errMsg(e), false);
         }
@@ -117,21 +134,27 @@
     // ── Tickets ───────────────────────────────────────────
     async function loadMyTickets() {
         const list = document.getElementById('tickets-list');
-        if (!token) { list.innerHTML = '<p style="color:#8b949e">Connectez-vous pour voir vos billets.</p>'; return; }
+        if (!token) {
+            list.innerHTML = `<p style="color:#8b949e">${t('tickets_login_required')}</p>`;
+            return;
+        }
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
             const tickets = await api('/tickets/user/' + payload.id);
-            if (!tickets.length) { list.innerHTML = '<p style="color:#8b949e">Aucun billet.</p>'; return; }
-            list.innerHTML = tickets.map(t => `
+            if (!tickets.length) {
+                list.innerHTML = `<p style="color:#8b949e">${t('tickets_none')}</p>`;
+                return;
+            }
+            list.innerHTML = tickets.map(tk => `
                 <div class="card">
-                    <h3>Billet #${t.id} <span class="badge badge-${t.status}">${t.status}</span></h3>
-                    <p>Code : <strong>${t.ticketCode}</strong></p>
-                    <p>${t.quantity} place(s) · ${(t.priceInCents / 100).toFixed(2)} €</p>
-                    <p>${new Date(t.createdAt).toLocaleString('fr-FR')}</p>
+                    <h3>${t('admin_ticket_by_id')}${tk.id} <span class="badge badge-${tk.status}">${tk.status}</span></h3>
+                    <p>${t('tickets_code_label')} <strong>${tk.ticketCode}</strong></p>
+                    <p>${tk.quantity} ${t('tickets_seats')} · ${(tk.priceInCents / 100).toFixed(2)} €</p>
+                    <p>${new Date(tk.createdAt).toLocaleString(t('date_locale'))}</p>
                 </div>
             `).join('');
         } catch (e) {
-            list.innerHTML = '<p style="color:#f85149">Erreur de chargement.</p>';
+            list.innerHTML = `<p style="color:#f85149">${t('tickets_load_error')}</p>`;
         }
     }
 
@@ -187,18 +210,21 @@
         try {
             const result = await api('/events');
             const events = result.data || result;
-            if (!events.length) { list.innerHTML = '<p style="color:#8b949e">Aucun événement.</p>'; return; }
+            if (!events.length) {
+                list.innerHTML = `<p style="color:#8b949e">${t('admin_events_none')}</p>`;
+                return;
+            }
             list.innerHTML = events.map(e => `
                 <div class="card card-row">
-                    <div style="flex-grow:1"><strong>${e.title}</strong> — ${e.availableTickets}/${e.maxCapacity} places · ${(e.priceInCents/100).toFixed(2)} €</div>
+                    <div style="flex-grow:1"><strong>${e.title}</strong> — ${e.availableTickets}/${e.maxCapacity} ${t('admin_seats')} · ${(e.priceInCents/100).toFixed(2)} €</div>
                     <div style="display:flex; gap:8px">
-                        <button class="btn-secondary" onclick="adminLoadTicketsByEvent(${e.id}, '${e.title.replace(/'/g, "\\'")}')">Billets</button>
-                        <button class="btn-secondary" style="border-color:#dc2626; color:#dc2626" onclick="adminDeleteEvent(${e.id})">Supprimer</button>
+                        <button class="btn-secondary" onclick="adminLoadTicketsByEvent(${e.id}, '${e.title.replace(/'/g, "\\'")}')">${t('admin_tickets_btn')}</button>
+                        <button class="btn-secondary" style="border-color:#dc2626; color:#dc2626" onclick="adminDeleteEvent(${e.id})">${t('admin_delete_btn')}</button>
                     </div>
                 </div>
             `).join('');
         } catch (e) {
-            list.innerHTML = '<p style="color:#f85149">Erreur.</p>';
+            list.innerHTML = `<p style="color:#f85149">${t('admin_events_load_error')}</p>`;
         }
     }
 
@@ -207,18 +233,21 @@
         try {
             const result = await api('/users');
             const users = result.data || result;
-            if (!users.length) { list.innerHTML = '<p style="color:#8b949e">Aucun utilisateur.</p>'; return; }
+            if (!users.length) {
+                list.innerHTML = `<p style="color:#8b949e">${t('admin_users_none')}</p>`;
+                return;
+            }
             list.innerHTML = users.map(u => `
                 <div class="card card-row" style="margin-bottom:8px">
                     <div style="flex-grow:1">
                         <strong>${u.firstname} ${u.lastname}</strong> — ${u.email}
                         <span class="badge badge-${u.role}" style="margin-left:8px">${u.role}</span>
                     </div>
-                    <button class="btn-secondary" onclick="adminLoadTicketsByUser(${u.id}, '${u.firstname.replace(/'/g, "\\'")} ${u.lastname.replace(/'/g, "\\'")}')">Billets</button>
+                    <button class="btn-secondary" onclick="adminLoadTicketsByUser(${u.id}, '${u.firstname.replace(/'/g, "\\'")} ${u.lastname.replace(/'/g, "\\'")}')">${t('admin_tickets_btn')}</button>
                 </div>
             `).join('');
         } catch (e) {
-            list.innerHTML = '<p style="color:#f85149">Erreur.</p>';
+            list.innerHTML = `<p style="color:#f85149">${t('admin_users_load_error')}</p>`;
         }
     }
 
@@ -236,7 +265,7 @@
                     priceInCents: parseInt(document.getElementById('adm-price').value)
                 })
             });
-            showMsg('admin-event-msg', 'Événement créé !', true);
+            showMsg('admin-event-msg', t('admin_event_created'), true);
             adminLoadEvents();
         } catch (e) {
             showMsg('admin-event-msg', errMsg(e), false);
@@ -244,27 +273,27 @@
     };
 
     window.adminDeleteEvent = async function (id) {
-        if (!confirm('Supprimer cet événement ?')) return;
+        if (!confirm(t('admin_delete_confirm'))) return;
         try {
             await api('/events/' + id, { method: 'DELETE' });
             adminLoadEvents();
         } catch (e) {
-            alert(e.error || 'Erreur suppression.');
+            alert(e.error || t('admin_delete_error'));
         }
     };
 
-    // ── Admin Tickets (New) ───────────────────────────────
+    // ── Admin Tickets ─────────────────────────────────────
     window.adminLoadTicketsByEvent = async function (eventId, title) {
         try {
             const tickets = await api('/tickets/event/' + eventId);
-            renderAdminTickets(tickets, `Billets pour : ${title}`);
+            renderAdminTickets(tickets, `${t('admin_tickets_for_event')} ${title}`);
         } catch (e) { alert(errMsg(e)); }
     };
 
     window.adminLoadTicketsByUser = async function (userId, name) {
         try {
             const tickets = await api('/tickets/user/' + userId);
-            renderAdminTickets(tickets, `Billets de : ${name}`);
+            renderAdminTickets(tickets, `${t('admin_tickets_for_user')} ${name}`);
         } catch (e) { alert(errMsg(e)); }
     };
 
@@ -273,7 +302,7 @@
         if (!id) return;
         try {
             const ticket = await api('/tickets/' + id);
-            renderAdminTickets([ticket], `Billet #${id}`);
+            renderAdminTickets([ticket], `${t('admin_ticket_by_id')}${id}`);
         } catch (e) { alert(errMsg(e)); }
     };
 
@@ -287,20 +316,20 @@
         sec.scrollIntoView({ behavior: 'smooth' });
 
         if (!tickets || !tickets.length || (tickets.length === 1 && !tickets[0].id)) {
-            list.innerHTML = '<p style="color:#8b949e">Aucun billet trouvé.</p>';
+            list.innerHTML = `<p style="color:#8b949e">${t('admin_tickets_none')}</p>`;
             return;
         }
 
-        list.innerHTML = tickets.map(t => `
+        list.innerHTML = tickets.map(tk => `
             <div class="card" style="border-style:dashed">
                 <div class="card-row">
                     <div>
-                        <strong>Billet #${t.id}</strong> <span class="badge badge-${t.status}">${t.status}</span><br/>
-                        <small>Code: ${t.ticketCode}</small>
+                        <strong>${t('admin_ticket_by_id')}${tk.id}</strong> <span class="badge badge-${tk.status}">${tk.status}</span><br/>
+                        <small>${t('code_label')} ${tk.ticketCode}</small>
                     </div>
                     <div style="text-align:right">
-                        ${t.quantity} place(s) · ${(t.priceInCents/100).toFixed(2)} €<br/>
-                        <small>${new Date(t.createdAt).toLocaleString('fr-FR')}</small>
+                        ${tk.quantity} ${t('admin_seats')} · ${(tk.priceInCents/100).toFixed(2)} €<br/>
+                        <small>${new Date(tk.createdAt).toLocaleString(t('date_locale'))}</small>
                     </div>
                 </div>
             </div>
@@ -322,5 +351,6 @@
 
     // ── Init ──────────────────────────────────────────────
     updateNav();
+    applyTranslations();
     loadEvents();
 })();

@@ -10,15 +10,19 @@
     <header class="header">
         <div class="logo">TicketApp</div>
         <nav>
-            <span class="nav-item" onclick="showPage('events')">Événements</span>
-            <span class="nav-item" onclick="showPage('my-tickets')">Mes billets</span>
+            <span class="nav-item" data-i18n="nav_events" onclick="showPage('events')">Événements</span>
+            <span class="nav-item" data-i18n="nav_my_tickets" onclick="showPage('my-tickets')">Mes billets</span>
             <span id="nav-auth">
-                <span class="nav-item" onclick="showPage('login')">Connexion</span>
-                <span class="nav-item" onclick="showPage('register')">Inscription</span>
+                <span class="nav-item" data-i18n="nav_login" onclick="showPage('login')">Connexion</span>
+                <span class="nav-item" data-i18n="nav_register" onclick="showPage('register')">Inscription</span>
             </span>
             <span id="nav-user" style="display:none">
-                <span id="nav-admin" style="display:none" class="nav-item" onclick="showPage('admin')">Admin</span>
-                <span class="nav-item logout" onclick="logout()">Déconnexion</span>
+                <span id="nav-admin" style="display:none" class="nav-item" data-i18n="nav_admin" onclick="showPage('admin')">Admin</span>
+                <span class="nav-item logout" data-i18n="nav_logout" onclick="logout()">Déconnexion</span>
+            </span>
+            <span class="lang-switcher">
+                <button class="lang-btn active" data-lang="fr" onclick="setLang('fr')">FR</button>
+                <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
             </span>
         </nav>
     </header>
@@ -27,121 +31,121 @@
 
         <!-- Events -->
         <section id="page-events" class="page active">
-            <h1>Événements disponibles</h1>
-            <div id="events-list">Chargement...</div>
+            <h1 data-i18n="events_title">Événements disponibles</h1>
+            <div id="events-list" data-i18n="events_loading">Chargement...</div>
         </section>
 
         <!-- Buy -->
         <section id="page-buy" class="page">
-            <a class="back" onclick="showPage('events')">← Retour</a>
+            <a class="back" data-i18n="buy_back" onclick="showPage('events')">← Retour</a>
             <div id="buy-event-info" class="card"></div>
             <div class="card">
-                <h2>Acheter un billet</h2>
+                <h2 data-i18n="buy_title">Acheter un billet</h2>
                 <div id="buy-msg"></div>
                 <div class="form-group">
-                    <label>Quantité</label>
+                    <label data-i18n="buy_qty_label">Quantité</label>
                     <input type="number" id="buy-qty" value="1" min="1" />
                 </div>
                 <div class="form-group">
-                    <label>Numéro de carte (simulé)</label>
-                    <input type="text" id="buy-card" placeholder="1234567890123456" maxlength="16" />
+                    <label data-i18n="buy_card_label">Numéro de carte (simulé)</label>
+                    <input type="text" id="buy-card" data-i18n-placeholder="buy_card_placeholder" placeholder="1234567890123456" maxlength="16" />
                 </div>
-                <button class="btn-primary" onclick="buyTicket()">Confirmer l'achat</button>
+                <button class="btn-primary" data-i18n="buy_submit" onclick="buyTicket()">Confirmer l'achat</button>
             </div>
         </section>
 
         <!-- My tickets -->
         <section id="page-my-tickets" class="page">
-            <h1>Mes billets</h1>
-            <div id="tickets-list">Connectez-vous pour voir vos billets.</div>
+            <h1 data-i18n="tickets_title">Mes billets</h1>
+            <div id="tickets-list" data-i18n="tickets_login_required">Connectez-vous pour voir vos billets.</div>
         </section>
 
         <!-- Login -->
         <section id="page-login" class="page">
             <div class="card">
-                <h2>Connexion</h2>
+                <h2 data-i18n="login_title">Connexion</h2>
                 <div id="login-msg"></div>
                 <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" id="login-email" placeholder="email@exemple.com" />
+                    <label data-i18n="login_email_label">Email</label>
+                    <input type="email" id="login-email" data-i18n-placeholder="login_email_placeholder" placeholder="email@exemple.com" />
                 </div>
                 <div class="form-group">
-                    <label>Mot de passe</label>
+                    <label data-i18n="login_pwd_label">Mot de passe</label>
                     <input type="password" id="login-pwd" />
                 </div>
-                <button class="btn-primary" onclick="login()">Se connecter</button>
+                <button class="btn-primary" data-i18n="login_submit" onclick="login()">Se connecter</button>
             </div>
         </section>
 
         <!-- Register -->
         <section id="page-register" class="page">
             <div class="card">
-                <h2>Inscription</h2>
+                <h2 data-i18n="register_title">Inscription</h2>
                 <div id="register-msg"></div>
                 <div class="form-group">
-                    <label>Prénom</label>
+                    <label data-i18n="register_firstname_label">Prénom</label>
                     <input type="text" id="reg-firstname" />
                 </div>
                 <div class="form-group">
-                    <label>Nom</label>
+                    <label data-i18n="register_lastname_label">Nom</label>
                     <input type="text" id="reg-lastname" />
                 </div>
                 <div class="form-group">
-                    <label>Email</label>
+                    <label data-i18n="register_email_label">Email</label>
                     <input type="email" id="reg-email" />
                 </div>
                 <div class="form-group">
-                    <label>Mot de passe</label>
+                    <label data-i18n="register_pwd_label">Mot de passe</label>
                     <input type="password" id="reg-pwd" />
                 </div>
-                <button class="btn-primary" onclick="register()">S'inscrire</button>
+                <button class="btn-primary" data-i18n="register_submit" onclick="register()">S'inscrire</button>
             </div>
         </section>
 
         <!-- Admin -->
         <section id="page-admin" class="page">
-            <h1>Administration</h1>
+            <h1 data-i18n="admin_title">Administration</h1>
 
-            <!-- Créer un événement -->
+            <!-- Create event -->
             <div class="card">
-                <h2>Créer un événement</h2>
+                <h2 data-i18n="admin_create_event_title">Créer un événement</h2>
                 <div id="admin-event-msg"></div>
-                <div class="form-group"><label>Titre</label><input type="text" id="adm-title" /></div>
-                <div class="form-group"><label>Description</label><input type="text" id="adm-desc" /></div>
-                <div class="form-group"><label>Date</label><input type="datetime-local" id="adm-date" /></div>
-                <div class="form-group"><label>Lieu</label><input type="text" id="adm-venue" /></div>
-                <div class="form-group"><label>Capacité max</label><input type="number" id="adm-capacity" value="100" min="1" /></div>
-                <div class="form-group"><label>Prix (centimes)</label><input type="number" id="adm-price" value="1500" min="0" /></div>
-                <button class="btn-primary" onclick="adminCreateEvent()">Créer l'événement</button>
+                <div class="form-group"><label data-i18n="admin_field_title">Titre</label><input type="text" id="adm-title" /></div>
+                <div class="form-group"><label data-i18n="admin_field_desc">Description</label><input type="text" id="adm-desc" /></div>
+                <div class="form-group"><label data-i18n="admin_field_date">Date</label><input type="datetime-local" id="adm-date" /></div>
+                <div class="form-group"><label data-i18n="admin_field_venue">Lieu</label><input type="text" id="adm-venue" /></div>
+                <div class="form-group"><label data-i18n="admin_field_capacity">Capacité max</label><input type="number" id="adm-capacity" value="100" min="1" /></div>
+                <div class="form-group"><label data-i18n="admin_field_price">Prix (centimes)</label><input type="number" id="adm-price" value="1500" min="0" /></div>
+                <button class="btn-primary" data-i18n="admin_create_btn" onclick="adminCreateEvent()">Créer l'événement</button>
             </div>
 
-            <!-- Liste des événements admin -->
+            <!-- Events list -->
             <div class="card">
-                <h2>Tous les événements</h2>
-                <div id="admin-events-list">Chargement...</div>
+                <h2 data-i18n="admin_events_list_title">Tous les événements</h2>
+                <div id="admin-events-list" data-i18n="admin_events_loading">Chargement...</div>
             </div>
 
-            <!-- Liste des utilisateurs (admin uniquement) -->
+            <!-- Users list (admin only) -->
             <div class="card" id="admin-users-section">
-                <h2>Utilisateurs</h2>
-                <div id="admin-users-list">Chargement...</div>
+                <h2 data-i18n="admin_users_title">Utilisateurs</h2>
+                <div id="admin-users-list" data-i18n="admin_users_loading">Chargement...</div>
             </div>
-            
-            <!-- Chercher un billet par ID -->
+
+            <!-- Search ticket by ID -->
             <div class="card">
-                <h2>Chercher un billet</h2>
+                <h2 data-i18n="admin_search_ticket_title">Chercher un billet</h2>
                 <div class="card-row" style="margin-bottom: 1rem;">
-                    <input type="number" id="adm-ticket-id" placeholder="ID du billet" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid #d1d5db;" />
-                    <button class="btn-primary" style="width: auto; margin-top: 0;" onclick="adminLoadTicketById()">Chercher</button>
+                    <input type="number" id="adm-ticket-id" data-i18n-placeholder="admin_ticket_id_placeholder" placeholder="ID du billet" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid #d1d5db;" />
+                    <button class="btn-primary" data-i18n="admin_search_btn" style="width: auto; margin-top: 0;" onclick="adminLoadTicketById()">Chercher</button>
                 </div>
             </div>
 
-            <!-- Résultats de recherche de billets -->
+            <!-- Ticket search results -->
             <div id="admin-tickets-results-section" style="display:none">
                 <div class="card">
                     <div class="card-row">
-                        <h2 id="admin-tickets-title">Billets</h2>
-                        <button class="btn-secondary" onclick="document.getElementById('admin-tickets-results-section').style.display='none'">Fermer</button>
+                        <h2 id="admin-tickets-title" data-i18n="admin_tickets_title">Billets</h2>
+                        <button class="btn-secondary" data-i18n="admin_close_btn" onclick="document.getElementById('admin-tickets-results-section').style.display='none'">Fermer</button>
                     </div>
                     <div id="admin-tickets-list"></div>
                 </div>
@@ -150,6 +154,7 @@
 
     </main>
 
+    <script src="js/i18n.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
