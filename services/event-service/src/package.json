@@ -1,0 +1,16 @@
+{
+  "name": "event-service",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "node --test src/**/*.test.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "pg": "^8.18.0",
+    "zod": "^4.3.6"
+  }
+}
