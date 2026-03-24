@@ -1,0 +1,595 @@
+version: "3.9"
+
+# =============================================================
+# 4WEBD-TICKET — Docker Compose
+# Point d'entrée : http://localhost:3030 (gateway-lb)
+# Frontend        : http://localhost:8080
+# RabbitMQ UI     : http://localhost:15672 (guest/guest)
+# =============================================================
+
+services:
+
+  # -------------------------------------------------------
+  # ZONE 1 — Edge / Load Balancer frontal
+  # -------------------------------------------------------
+
+  gateway-lb:
+    build:
+      context: ./infra/nginx
+    ports:
+      - "3030:3030"
+    depends_on:
+      - api-gateway-1
+      - api-gateway-2
+    restart: unless-stopped
+
+  # -------------------------------------------------------
+  # ZONE 2 — API Gateway (x2 pour HA)
+  # -------------------------------------------------------
+
+  api-gateway-1:
+    build:
+      context: ./services/gateway
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_URL: http://auth-lb:3010
+      USER_URL: http://user-lb:3011
+      EVENT_URL: http://event-lb:3021
+      BOOKING_URL: http://booking-lb:3020
+      PAYMENT_URL: http://payment-service:3005
+      NOTIFICATION_URL: http://notification-service:3002
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      auth-lb:
+        condition: service_started
+      user-lb:
+        condition: service_started
+      event-lb:
+        condition: service_started
+      booking-lb:
+        condition: service_started
+    restart: unless-stopped
+
+  api-gateway-2:
+    build:
+      context: ./services/gateway
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_URL: http://auth-lb:3010
+      USER_URL: http://user-lb:3011
+      EVENT_URL: http://event-lb:3021
+      BOOKING_URL: http://booking-lb:3020
+      PAYMENT_URL: http://payment-service:3005
+      NOTIFICATION_URL: http://notification-service:3002
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      auth-lb:
+        condition: service_started
+      user-lb:
+        condition: service_started
+      event-lb:
+        condition: service_started
+      booking-lb:
+        condition: service_started
+    restart: unless-stopped
+
+  # -------------------------------------------------------
+  # ZONE 3 — auth-service (x2 + LB + DB primary/replica)
+  # -------------------------------------------------------
+
+  auth-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+      POSTGRES_DB: auth_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - auth-pgdata:/var/lib/postgresql/data
+      - ./services/auth-service/db/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+    restart: unless-stopped
+
+  auth-db-replica:
+    build:
+      context: ./services/auth-service/db-replica
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      PGPASSWORD: replicator
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+      POSTGRES_DB: auth_db
+    volumes:
+      - auth-pgreplica:/var/lib/postgresql/data
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  auth-service-1:
+    build:
+      context: ./services/auth-service/src
+    environment:
+      PORT: 3004
+      DATABASE_URL: postgresql://auth_user:auth_pass@auth-db:5432/auth_db
+      DATABASE_REPLICA_URL: postgresql://auth_user:auth_pass@auth-db-replica:5432/auth_db
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      auth-db-replica:
+        condition: service_started
+    restart: unless-stopped
+
+  auth-service-2:
+    build:
+      context: ./services/auth-service/src
+    environment:
+      PORT: 3004
+      DATABASE_URL: postgresql://auth_user:auth_pass@auth-db:5432/auth_db
+      DATABASE_REPLICA_URL: postgresql://auth_user:auth_pass@auth-db-replica:5432/auth_db
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      auth-db-replica:
+        condition: service_started
+    restart: unless-stopped
+
+  auth-lb:
+    build:
+      context: ./services/auth-service/lb
+    ports:
+      - "3010:3010"
+    depends_on:
+      - auth-service-1
+      - auth-service-2
+    restart: unless-stopped
+
+  # -------------------------------------------------------
+  # ZONE 3 — user-service (x2 + LB + DB primary/replica)
+  # -------------------------------------------------------
+
+  user-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: user_user
+      POSTGRES_PASSWORD: user_pass
+      POSTGRES_DB: user_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - user-pgdata:/var/lib/postgresql/data
+      - ./services/user-service/db/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+    restart: unless-stopped
+
+  user-db-replica:
+    build:
+      context: ./services/user-service/db-replica
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      PGPASSWORD: replicator
+      POSTGRES_USER: user_user
+      POSTGRES_PASSWORD: user_pass
+      POSTGRES_DB: user_db
+    volumes:
+      - user-pgreplica:/var/lib/postgresql/data
+    depends_on:
+      user-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  user-service-1:
+    build:
+      context: ./services/user-service/src
+    environment:
+      PORT: 3004
+      DATABASE_URL: postgresql://user_user:user_pass@user-db:5432/user_db
+      DATABASE_REPLICA_URL: postgresql://user_user:user_pass@user-db-replica:5432/user_db
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      user-db:
+        condition: service_healthy
+      user-db-replica:
+        condition: service_started
+    restart: unless-stopped
+
+  user-service-2:
+    build:
+      context: ./services/user-service/src
+    environment:
+      PORT: 3004
+      DATABASE_URL: postgresql://user_user:user_pass@user-db:5432/user_db
+      DATABASE_REPLICA_URL: postgresql://user_user:user_pass@user-db-replica:5432/user_db
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      user-db:
+        condition: service_healthy
+      user-db-replica:
+        condition: service_started
+    restart: unless-stopped
+
+  user-lb:
+    build:
+      context: ./services/user-service/lb
+    ports:
+      - "3011:3011"
+    depends_on:
+      - user-service-1
+      - user-service-2
+    restart: unless-stopped
+
+  # -------------------------------------------------------
+  # ZONE 3 — event-service (x2 + LB + DB primary/replica)
+  # -------------------------------------------------------
+
+  event-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: event_user
+      POSTGRES_PASSWORD: event_pass
+      POSTGRES_DB: event_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U event_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - event-pgdata:/var/lib/postgresql/data
+      - ./services/event-service/db/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+    restart: unless-stopped
+
+  event-db-replica:
+    build:
+      context: ./services/event-service/db-replica
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      PGPASSWORD: replicator
+      POSTGRES_USER: event_user
+      POSTGRES_PASSWORD: event_pass
+      POSTGRES_DB: event_db
+    volumes:
+      - event-pgreplica:/var/lib/postgresql/data
+    depends_on:
+      event-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  event-service-1:
+    build:
+      context: ./services/event-service/src
+    environment:
+      PORT: 3006
+      DATABASE_URL: postgresql://event_user:event_pass@event-db:5432/event_db
+      DATABASE_REPLICA_URL: postgresql://event_user:event_pass@event-db-replica:5432/event_db
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      event-db:
+        condition: service_healthy
+      event-db-replica:
+        condition: service_started
+    restart: unless-stopped
+
+  event-service-2:
+    build:
+      context: ./services/event-service/src
+    environment:
+      PORT: 3006
+      DATABASE_URL: postgresql://event_user:event_pass@event-db:5432/event_db
+      DATABASE_REPLICA_URL: postgresql://event_user:event_pass@event-db-replica:5432/event_db
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      event-db:
+        condition: service_healthy
+      event-db-replica:
+        condition: service_started
+    restart: unless-stopped
+
+  event-lb:
+    build:
+      context: ./services/event-service/lb
+    ports:
+      - "3021:3021"
+    depends_on:
+      - event-service-1
+      - event-service-2
+    restart: unless-stopped
+
+  # -------------------------------------------------------
+  # ZONE 3 — booking-service (x2 + LB + DB primary/replica)
+  # -------------------------------------------------------
+
+  booking-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: booking_user
+      POSTGRES_PASSWORD: booking_pass
+      POSTGRES_DB: booking_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U booking_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - booking-pgdata:/var/lib/postgresql/data
+      - ./services/booking-service/db/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+    restart: unless-stopped
+
+  booking-db-replica:
+    build:
+      context: ./services/booking-service/db-replica
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      PGPASSWORD: replicator
+      POSTGRES_USER: booking_user
+      POSTGRES_PASSWORD: booking_pass
+      POSTGRES_DB: booking_db
+    volumes:
+      - booking-pgreplica:/var/lib/postgresql/data
+    depends_on:
+      booking-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  booking-service-1:
+    build:
+      context: ./services/booking-service/src
+    environment:
+      PORT: 3003
+      DATABASE_URL: postgresql://booking_user:booking_pass@booking-db:5432/booking_db
+      DATABASE_REPLICA_URL: postgresql://booking_user:booking_pass@booking-db-replica:5432/booking_db
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      EVENT_URL: http://event-lb:3021
+    depends_on:
+      booking-db:
+        condition: service_healthy
+      booking-db-replica:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  booking-service-2:
+    build:
+      context: ./services/booking-service/src
+    environment:
+      PORT: 3003
+      DATABASE_URL: postgresql://booking_user:booking_pass@booking-db:5432/booking_db
+      DATABASE_REPLICA_URL: postgresql://booking_user:booking_pass@booking-db-replica:5432/booking_db
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      EVENT_URL: http://event-lb:3021
+    depends_on:
+      booking-db:
+        condition: service_healthy
+      booking-db-replica:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  booking-lb:
+    build:
+      context: ./services/booking-service/lb
+    ports:
+      - "3020:3020"
+    depends_on:
+      - booking-service-1
+      - booking-service-2
+    restart: unless-stopped
+
+  # -------------------------------------------------------
+  # ZONE 3 — payment-service (x1 + DB primary/replica)
+  # -------------------------------------------------------
+
+  payment-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: payment_user
+      POSTGRES_PASSWORD: payment_pass
+      POSTGRES_DB: payment_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - payment-pgdata:/var/lib/postgresql/data
+      - ./services/payment-service/db/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+    restart: unless-stopped
+
+  payment-db-replica:
+    build:
+      context: ./services/payment-service/db-replica
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      PGPASSWORD: replicator
+      POSTGRES_USER: payment_user
+      POSTGRES_PASSWORD: payment_pass
+      POSTGRES_DB: payment_db
+    volumes:
+      - payment-pgreplica:/var/lib/postgresql/data
+    depends_on:
+      payment-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  payment-service:
+    build:
+      context: ./services/payment-service/src
+    ports:
+      - "3005:3005"
+    environment:
+      PORT: 3005
+      DATABASE_URL: postgresql://payment_user:payment_pass@payment-db:5432/payment_db
+      DATABASE_REPLICA_URL: postgresql://payment_user:payment_pass@payment-db-replica:5432/payment_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      BOOKING_URL: http://booking-lb:3020
+      SIMULATE_FAILURE_RATE: ${SIMULATE_FAILURE_RATE:-0}
+    depends_on:
+      payment-db:
+        condition: service_healthy
+      payment-db-replica:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      booking-lb:
+        condition: service_started
+    restart: unless-stopped
+
+  # -------------------------------------------------------
+  # ZONE 3 — notification-service (x1 + DB primary/replica)
+  # -------------------------------------------------------
+
+  notif-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: notif_user
+      POSTGRES_PASSWORD: notif_pass
+      POSTGRES_DB: notif_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notif_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - notif-pgdata:/var/lib/postgresql/data
+      - ./services/notification-service/db/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+    restart: unless-stopped
+
+  notif-db-replica:
+    build:
+      context: ./services/notification-service/db-replica
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      PGPASSWORD: replicator
+      POSTGRES_USER: notif_user
+      POSTGRES_PASSWORD: notif_pass
+      POSTGRES_DB: notif_db
+    volumes:
+      - notif-pgreplica:/var/lib/postgresql/data
+    depends_on:
+      notif-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: ./services/notification-service/src
+    ports:
+      - "3002:3002"
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgresql://notif_user:notif_pass@notif-db:5432/notif_db
+      DATABASE_REPLICA_URL: postgresql://notif_user:notif_pass@notif-db-replica:5432/notif_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      notif-db:
+        condition: service_healthy
+      notif-db-replica:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # -------------------------------------------------------
+  # ZONE 4 — Infrastructure partagée
+  # -------------------------------------------------------
+
+  rabbitmq:
+    image: rabbitmq:3.11-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+
+  # -------------------------------------------------------
+  # ZONE 5 — Observabilité (stretch goal)
+  # -------------------------------------------------------
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    ports:
+      - "16686:16686"  # UI Jaeger
+      - "14250:14250"  # gRPC
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.92.0
+    command: ["--config=/etc/otel-config.yaml"]
+    volumes:
+      - ./infra/otel-collector/otel-config.yaml:/etc/otel-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  # -------------------------------------------------------
+  # Frontend
+  # -------------------------------------------------------
+
+  frontend:
+    build:
+      context: ./services/frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - gateway-lb
+    restart: unless-stopped
+
+# =============================================================
+# Volumes
+# =============================================================
+
+volumes:
+  auth-pgdata:
+  auth-pgreplica:
+  user-pgdata:
+  user-pgreplica:
+  event-pgdata:
+  event-pgreplica:
+  booking-pgdata:
+  booking-pgreplica:
+  payment-pgdata:
+  payment-pgreplica:
+  notif-pgdata:
+  notif-pgreplica:
+  rabbitmqdata:
+  redisdata:

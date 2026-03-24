@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TicketApp</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+    <header class="header">
+        <div class="logo">TicketApp</div>
+        <nav>
+            <span class="nav-item" onclick="showPage('events')">Événements</span>
+            <span class="nav-item" onclick="showPage('my-tickets')">Mes billets</span>
+            <span id="nav-auth">
+                <span class="nav-item" onclick="showPage('login')">Connexion</span>
+                <span class="nav-item" onclick="showPage('register')">Inscription</span>
+            </span>
+            <span id="nav-user" style="display:none">
+                <span id="nav-admin" style="display:none" class="nav-item" onclick="showPage('admin')">Admin</span>
+                <span class="nav-item logout" onclick="logout()">Déconnexion</span>
+            </span>
+        </nav>
+    </header>
+
+    <main class="main">
+
+        <!-- Events -->
+        <section id="page-events" class="page active">
+            <h1>Événements disponibles</h1>
+            <div id="events-list">Chargement...</div>
+        </section>
+
+        <!-- Buy -->
+        <section id="page-buy" class="page">
+            <a class="back" onclick="showPage('events')">← Retour</a>
+            <div id="buy-event-info" class="card"></div>
+            <div class="card">
+                <h2>Acheter un billet</h2>
+                <div id="buy-msg"></div>
+                <div class="form-group">
+                    <label>Quantité</label>
+                    <input type="number" id="buy-qty" value="1" min="1" />
+                </div>
+                <div class="form-group">
+                    <label>Numéro de carte (simulé)</label>
+                    <input type="text" id="buy-card" placeholder="1234567890123456" maxlength="16" />
+                </div>
+                <button class="btn-primary" onclick="buyTicket()">Confirmer l'achat</button>
+            </div>
+        </section>
+
+        <!-- My tickets -->
+        <section id="page-my-tickets" class="page">
+            <h1>Mes billets</h1>
+            <div id="tickets-list">Connectez-vous pour voir vos billets.</div>
+        </section>
+
+        <!-- Login -->
+        <section id="page-login" class="page">
+            <div class="card">
+                <h2>Connexion</h2>
+                <div id="login-msg"></div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" placeholder="email@exemple.com" />
+                </div>
+                <div class="form-group">
+                    <label>Mot de passe</label>
+                    <input type="password" id="login-pwd" />
+                </div>
+                <button class="btn-primary" onclick="login()">Se connecter</button>
+            </div>
+        </section>
+
+        <!-- Register -->
+        <section id="page-register" class="page">
+            <div class="card">
+                <h2>Inscription</h2>
+                <div id="register-msg"></div>
+                <div class="form-group">
+                    <label>Prénom</label>
+                    <input type="text" id="reg-firstname" />
+                </div>
+                <div class="form-group">
+                    <label>Nom</label>
+                    <input type="text" id="reg-lastname" />
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="reg-email" />
+                </div>
+                <div class="form-group">
+                    <label>Mot de passe</label>
+                    <input type="password" id="reg-pwd" />
+                </div>
+                <button class="btn-primary" onclick="register()">S'inscrire</button>
+            </div>
+        </section>
+
+        <!-- Admin -->
+        <section id="page-admin" class="page">
+            <h1>Administration</h1>
+
+            <!-- Créer un événement -->
+            <div class="card">
+                <h2>Créer un événement</h2>
+                <div id="admin-event-msg"></div>
+                <div class="form-group"><label>Titre</label><input type="text" id="adm-title" /></div>
+                <div class="form-group"><label>Description</label><input type="text" id="adm-desc" /></div>
+                <div class="form-group"><label>Date</label><input type="datetime-local" id="adm-date" /></div>
+                <div class="form-group"><label>Lieu</label><input type="text" id="adm-venue" /></div>
+                <div class="form-group"><label>Capacité max</label><input type="number" id="adm-capacity" value="100" min="1" /></div>
+                <div class="form-group"><label>Prix (centimes)</label><input type="number" id="adm-price" value="1500" min="0" /></div>
+                <button class="btn-primary" onclick="adminCreateEvent()">Créer l'événement</button>
+            </div>
+
+            <!-- Liste des événements admin -->
+            <div class="card">
+                <h2>Tous les événements</h2>
+                <div id="admin-events-list">Chargement...</div>
+            </div>
+
+            <!-- Liste des utilisateurs -->
+            <div class="card">
+                <h2>Utilisateurs</h2>
+                <div id="admin-users-list">Chargement...</div>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
