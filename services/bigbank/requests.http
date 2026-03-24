@@ -1,0 +1,167 @@
+### ========== USERS (via bigbank → user-service) ==========
+
+### Créer un customer
+POST http://localhost:3000/users
+Content-Type: application/json
+
+{
+  "firstname": "Jean",
+  "lastname": "Mirabeau",
+  "email": "jean@bigbank.com",
+  "phone": "0645324567",
+  "password": "Motdepasse123"
+}
+
+### Créer un 2ème customer
+POST http://localhost:3000/users
+Content-Type: application/json
+
+{
+  "firstname": "Marie",
+  "lastname": "Madeleine",
+  "email": "marie@bigbank.com",
+  "password": "autrepassword1"
+}
+
+### Créer un employee (directement sur user-service)
+POST http://localhost:3004/users
+Content-Type: application/json
+
+{
+  "firstname": "Admin",
+  "lastname": "Dupont",
+  "email": "admin@bigbank.com",
+  "password": "AdminPass123",
+  "role": "employee"
+}
+
+### Lister les users via bigbank (customers uniquement)
+GET http://localhost:3000/users
+
+### Lister TOUS les users (via user-service)
+GET http://localhost:3004/users
+
+### Filtrer : uniquement les customers
+GET http://localhost:3004/users?role=customer
+
+### Filtrer : uniquement les employees
+GET http://localhost:3004/users?role=employee
+
+### Récupérer un utilisateur
+GET http://localhost:3000/users/1
+
+### Modifier le téléphone
+PUT http://localhost:3000/users/1
+Content-Type: application/json
+
+{
+  "phone": "0634214321"
+}
+
+### Tester email en doublon (doit renvoyer 409)
+POST http://localhost:3000/users
+Content-Type: application/json
+
+{
+  "firstname": "Doublon",
+  "lastname": "Test",
+  "email": "jean@bigbank.com",
+  "password": "Motdepasse123"
+}
+
+### Tester validation (doit renvoyer 400)
+POST http://localhost:3000/users
+Content-Type: application/json
+
+{
+  "firstname": "",
+  "email": "pasunemail",
+  "password": "court"
+}
+
+### Supprimer un utilisateur
+DELETE http://localhost:3000/users/1
+
+### ========== ACCOUNTS (via bigbank → account-service) ==========
+
+### Créer un compte courant pour le user 1
+POST http://localhost:3000/users/1/accounts
+Content-Type: application/json
+
+{
+  "label": "Compte courant",
+  "type": "checking"
+}
+
+### Créer un compte épargne pour le user 1
+POST http://localhost:3000/users/1/accounts
+Content-Type: application/json
+
+{
+  "label": "Épargne",
+  "type": "savings"
+}
+
+### Lister les comptes du user 1
+GET http://localhost:3000/users/1/accounts
+
+### Détail du compte 1
+GET http://localhost:3000/users/1/accounts/1
+
+### Modifier le label du compte
+PUT http://localhost:3000/users/1/accounts/1
+Content-Type: application/json
+
+{
+  "label": "Compte principal"
+}
+
+### Supprimer un compte
+DELETE http://localhost:3000/users/1/accounts/2
+
+### ========== TRANSACTIONS ==========
+
+### Créer un transfert (du compte 1 vers le compte 2)
+POST http://localhost:3000/transactions
+Content-Type: application/json
+
+{
+  "fromAccountId": 1,
+  "toAccountId": 2,
+  "amount": 15,
+  "description": "Virement vers épargne"
+}
+
+### Lister toutes les transactions
+GET http://localhost:3000/transactions
+
+### Transactions d'un compte spécifique
+GET http://localhost:3000/transactions/account/1
+
+### Vérifier les soldes après transfert
+GET http://localhost:3000/users/1/accounts
+
+### ========== PAGINATION ==========
+
+### Users page 1, limit 2
+GET http://localhost:3000/users?page=1&limit=2
+
+### Users page 2, limit 2
+GET http://localhost:3000/users?page=2&limit=2
+
+### Transactions paginées
+GET http://localhost:3000/transactions?page=1&limit=5
+
+### ========== ADMIN (port 3001) ==========
+
+### Vue admin complète (users + comptes + transactions)
+GET http://localhost:3001/admin/overview
+
+### Admin - tous les users
+GET http://localhost:3001/admin/users
+
+### Admin - user avec ses comptes
+GET http://localhost:3001/admin/users/1
+
+### Admin - toutes les transactions
+GET http://localhost:3001/admin/transactions
