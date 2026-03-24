@@ -1,9 +1,9 @@
 import amqp from 'amqplib';
 import { processPayment } from './payment.service.js';
 
-const RABBITMQ_URL  = process.env.RABBITMQ_URL  || 'amqp://guest:guest@rabbitmq:5672';
-const BOOKING_URL   = process.env.BOOKING_URL   || 'http://booking-lb:3020/tickets';
-const EVENT_URL     = process.env.EVENT_URL     || 'http://event-lb:3020/events';
+const RABBITMQ_URL  = process.env.RABBITMQ_URL;
+const BOOKING_URL   = process.env.BOOKING_URL;
+const EVENT_URL     = process.env.EVENT_URL;
 const PAYMENT_QUEUE = 'payments';
 const NOTIF_QUEUE   = 'notifications';
 

@@ -1,6 +1,6 @@
 import amqp from 'amqplib';
 
-const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://guest@localhost:5672';
+const RABBITMQ_URL = process.env.RABBITMQ_URL;
 const QUEUE_NAME   = 'bookings';
 
 let channel    = null;

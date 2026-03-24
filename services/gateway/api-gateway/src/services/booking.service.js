@@ -1,4 +1,4 @@
-const BOOKING_URL = process.env.BOOKING_URL || 'http://localhost:3005/tickets';
+const BOOKING_URL = process.env.BOOKING_URL;
 
 export async function getTicketsByUser(userId) {
     const response = await fetch(`${BOOKING_URL}/user/${userId}`);

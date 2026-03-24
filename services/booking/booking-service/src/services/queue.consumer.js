@@ -1,8 +1,8 @@
 import amqp from 'amqplib';
 import { createTicket } from './ticket.service.js';
 
-const RABBITMQ_URL   = process.env.RABBITMQ_URL   || 'amqp://guest:guest@rabbitmq:5672';
-const EVENT_URL      = process.env.EVENT_URL      || 'http://event-lb:3020/events';
+const RABBITMQ_URL   = process.env.RABBITMQ_URL;
+const EVENT_URL      = process.env.EVENT_URL;
 const BOOKING_QUEUE  = 'bookings';
 const PAYMENT_QUEUE  = 'payments';
 const NOTIF_QUEUE    = 'notifications';

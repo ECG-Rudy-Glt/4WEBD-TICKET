@@ -3,7 +3,6 @@ import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth.js';
 
 const app = express();
-
 app.use(express.json());
 
 const limiter = rateLimit({

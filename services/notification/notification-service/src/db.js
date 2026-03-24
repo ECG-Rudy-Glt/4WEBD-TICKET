@@ -3,7 +3,7 @@ import pg from 'pg';
 const { Pool } = pg;
 
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://notif_user:notif_pass@notif-db:5432/notif_db',
+    connectionString: process.env.DATABASE_URL,
 });
 
 export async function initDb() {

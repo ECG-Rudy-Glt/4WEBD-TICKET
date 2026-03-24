@@ -3,11 +3,11 @@ import pg from 'pg';
 const { Pool } = pg;
 
 const primaryPool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://booking_user:booking_pass@booking-db:5432/booking_db',
+    connectionString: process.env.DATABASE_URL,
 });
 
 const replicaPool = new Pool({
-    connectionString: process.env.DATABASE_REPLICA_URL || process.env.DATABASE_URL || 'postgresql://booking_user:booking_pass@booking-db:5432/booking_db',
+    connectionString: process.env.DATABASE_REPLICA_URL,
 });
 
 export async function initDb() {

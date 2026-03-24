@@ -1,8 +1,8 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-prod';
-const USER_URL   = process.env.USER_URL || 'http://user-lb:3010/users';
+const JWT_SECRET = process.env.JWT_SECRET;
+const USER_URL   = process.env.USER_URL;
 
 export async function register(data) {
     const res = await fetch(USER_URL, {

@@ -1,7 +1,7 @@
 import amqp from 'amqplib';
 import { saveAndLog } from './notification.service.js';
 
-const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://guest:guest@rabbitmq:5672';
+const RABBITMQ_URL = process.env.RABBITMQ_URL;
 const QUEUE_NAME   = 'notifications';
 
 export async function startNotificationConsumer() {

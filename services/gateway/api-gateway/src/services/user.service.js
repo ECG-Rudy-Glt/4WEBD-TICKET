@@ -1,4 +1,4 @@
-const USER_URL = process.env.USER_URL || 'http://localhost:3001/users';
+const USER_URL = process.env.USER_URL;
 
 export async function createUser(data) {
     const response = await fetch(USER_URL, {

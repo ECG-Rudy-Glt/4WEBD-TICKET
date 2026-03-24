@@ -1,4 +1,4 @@
-const AUTH_URL = process.env.AUTH_URL || 'http://localhost:3001/auth';
+const AUTH_URL = process.env.AUTH_URL;
 
 export async function register(data) {
     const response = await fetch(`${AUTH_URL}/register`, {

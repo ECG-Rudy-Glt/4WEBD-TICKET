@@ -1,4 +1,4 @@
-const EVENT_URL = process.env.EVENT_URL || 'http://localhost:3003/events';
+const EVENT_URL = process.env.EVENT_URL;
 
 export async function createEvent(data) {
     const response = await fetch(EVENT_URL, {

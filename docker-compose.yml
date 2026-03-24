@@ -8,10 +8,13 @@ services:
     restart: on-failure
     build: ./services/auth/auth-service
     environment:
-      - PORT=3000
-      - JWT_SECRET=${JWT_SECRET:-changeme}
-      - USER_URL=http://user-lb:3010/users
+      - PORT=${PORT}
+      - DATABASE_URL=${AUTH_DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - USER_URL=${USER_URL}
     depends_on:
+      user-db:
+        condition: service_healthy
       user-lb:
         condition: service_started
 
@@ -19,10 +22,13 @@ services:
     restart: on-failure
     build: ./services/auth/auth-service
     environment:
-      - PORT=3000
-      - JWT_SECRET=${JWT_SECRET:-changeme}
-      - USER_URL=http://user-lb:3010/users
+      - PORT=${PORT}
+      - DATABASE_URL=${AUTH_DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - USER_URL=${USER_URL}
     depends_on:
+      user-db:
+        condition: service_healthy
       user-lb:
         condition: service_started
 
@@ -36,7 +42,6 @@ services:
       - auth-service-2
 
 
-
   # -------------------------------------------------------
   # user-service (x2 + LB + DB primary/replica)
   # -------------------------------------------------------
@@ -45,9 +50,9 @@ services:
     restart: on-failure
     build: ./services/user/user-service
     environment:
-      - PORT=3000
-      - DATABASE_URL=postgresql://user_user:user_pass@user-db:5432/user_db
-      - DATABASE_REPLICA_URL=postgresql://user_user:user_pass@user-db-replica:5432/user_db
+      - PORT=${PORT}
+      - DATABASE_URL=${USER_DATABASE_URL}
+      - DATABASE_REPLICA_URL=${USER_DATABASE_REPLICA_URL}
     depends_on:
       user-db:
         condition: service_healthy
@@ -56,9 +61,9 @@ services:
     restart: on-failure
     build: ./services/user/user-service
     environment:
-      - PORT=3000
-      - DATABASE_URL=postgresql://user_user:user_pass@user-db:5432/user_db
-      - DATABASE_REPLICA_URL=postgresql://user_user:user_pass@user-db-replica:5432/user_db
+      - PORT=${PORT}
+      - DATABASE_URL=${USER_DATABASE_URL}
+      - DATABASE_REPLICA_URL=${USER_DATABASE_REPLICA_URL}
     depends_on:
       user-db:
         condition: service_healthy
@@ -77,11 +82,11 @@ services:
   user-db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: user_user
-      POSTGRES_PASSWORD: user_pass
-      POSTGRES_DB: user_db
+      - POSTGRES_USER=${USER_DB_USER}
+      - POSTGRES_PASSWORD=${USER_DB_PASSWORD}
+      - POSTGRES_DB=${USER_DB_NAME}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user_user -d user_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${USER_DB_USER} -d ${USER_DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -92,16 +97,18 @@ services:
   user-db-replica:
     build: ./services/user/db-replica
     environment:
-      PGDATA: /var/lib/postgresql/data
-      PGPASSWORD: replicator
-      POSTGRES_USER: user_user
-      POSTGRES_PASSWORD: user_pass
-      POSTGRES_DB: user_db
+      - PGDATA=/var/lib/postgresql/data
+      - PGPASSWORD=replicator
+      - POSTGRES_USER=${USER_DB_USER}
+      - POSTGRES_PASSWORD=${USER_DB_PASSWORD}
+      - POSTGRES_DB=${USER_DB_NAME}
+      - PRIMARY_HOST=user-db
     volumes:
       - user-pgreplica:/var/lib/postgresql/data
     depends_on:
       user-db:
         condition: service_healthy
+
 
   # -------------------------------------------------------
   # event-service (x2 + LB + DB primary/replica)
@@ -111,9 +118,9 @@ services:
     restart: on-failure
     build: ./services/event/event-service
     environment:
-      - PORT=3000
-      - DATABASE_URL=postgresql://event_user:event_pass@event-db:5432/event_db
-      - DATABASE_REPLICA_URL=postgresql://event_user:event_pass@event-db-replica:5432/event_db
+      - PORT=${PORT}
+      - DATABASE_URL=${EVENT_DATABASE_URL}
+      - DATABASE_REPLICA_URL=${EVENT_DATABASE_REPLICA_URL}
     depends_on:
       event-db:
         condition: service_healthy
@@ -122,9 +129,9 @@ services:
     restart: on-failure
     build: ./services/event/event-service
     environment:
-      - PORT=3000
-      - DATABASE_URL=postgresql://event_user:event_pass@event-db:5432/event_db
-      - DATABASE_REPLICA_URL=postgresql://event_user:event_pass@event-db-replica:5432/event_db
+      - PORT=${PORT}
+      - DATABASE_URL=${EVENT_DATABASE_URL}
+      - DATABASE_REPLICA_URL=${EVENT_DATABASE_REPLICA_URL}
     depends_on:
       event-db:
         condition: service_healthy
@@ -141,11 +148,11 @@ services:
   event-db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: event_user
-      POSTGRES_PASSWORD: event_pass
-      POSTGRES_DB: event_db
+      - POSTGRES_USER=${EVENT_DB_USER}
+      - POSTGRES_PASSWORD=${EVENT_DB_PASSWORD}
+      - POSTGRES_DB=${EVENT_DB_NAME}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U event_user -d event_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${EVENT_DB_USER} -d ${EVENT_DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -156,11 +163,12 @@ services:
   event-db-replica:
     build: ./services/event/db-replica
     environment:
-      PGDATA: /var/lib/postgresql/data
-      PGPASSWORD: replicator
-      POSTGRES_USER: event_user
-      POSTGRES_PASSWORD: event_pass
-      POSTGRES_DB: event_db
+      - PGDATA=/var/lib/postgresql/data
+      - PGPASSWORD=replicator
+      - POSTGRES_USER=${EVENT_DB_USER}
+      - POSTGRES_PASSWORD=${EVENT_DB_PASSWORD}
+      - POSTGRES_DB=${EVENT_DB_NAME}
+      - PRIMARY_HOST=event-db
     volumes:
       - event-pgreplica:/var/lib/postgresql/data
     depends_on:
@@ -175,11 +183,11 @@ services:
     restart: on-failure
     build: ./services/booking/booking-service
     environment:
-      - PORT=3000
-      - DATABASE_URL=postgresql://booking_user:booking_pass@booking-db:5432/booking_db
-      - DATABASE_REPLICA_URL=postgresql://booking_user:booking_pass@booking-db-replica:5432/booking_db
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
-      - EVENT_URL=http://event-lb:3020/events
+      - PORT=${PORT}
+      - DATABASE_URL=${BOOKING_DATABASE_URL}
+      - DATABASE_REPLICA_URL=${BOOKING_DATABASE_REPLICA_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+      - EVENT_URL=${EVENT_URL}
     depends_on:
       booking-db:
         condition: service_healthy
@@ -190,11 +198,11 @@ services:
     restart: on-failure
     build: ./services/booking/booking-service
     environment:
-      - PORT=3000
-      - DATABASE_URL=postgresql://booking_user:booking_pass@booking-db:5432/booking_db
-      - DATABASE_REPLICA_URL=postgresql://booking_user:booking_pass@booking-db-replica:5432/booking_db
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
-      - EVENT_URL=http://event-lb:3020/events
+      - PORT=${PORT}
+      - DATABASE_URL=${BOOKING_DATABASE_URL}
+      - DATABASE_REPLICA_URL=${BOOKING_DATABASE_REPLICA_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+      - EVENT_URL=${EVENT_URL}
     depends_on:
       booking-db:
         condition: service_healthy
@@ -213,11 +221,11 @@ services:
   booking-db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: booking_user
-      POSTGRES_PASSWORD: booking_pass
-      POSTGRES_DB: booking_db
+      - POSTGRES_USER=${BOOKING_DB_USER}
+      - POSTGRES_PASSWORD=${BOOKING_DB_PASSWORD}
+      - POSTGRES_DB=${BOOKING_DB_NAME}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U booking_user -d booking_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${BOOKING_DB_USER} -d ${BOOKING_DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -228,11 +236,12 @@ services:
   booking-db-replica:
     build: ./services/booking/db-replica
     environment:
-      PGDATA: /var/lib/postgresql/data
-      PGPASSWORD: replicator
-      POSTGRES_USER: booking_user
-      POSTGRES_PASSWORD: booking_pass
-      POSTGRES_DB: booking_db
+      - PGDATA=/var/lib/postgresql/data
+      - PGPASSWORD=replicator
+      - POSTGRES_USER=${BOOKING_DB_USER}
+      - POSTGRES_PASSWORD=${BOOKING_DB_PASSWORD}
+      - POSTGRES_DB=${BOOKING_DB_NAME}
+      - PRIMARY_HOST=booking-db
     volumes:
       - booking-pgreplica:/var/lib/postgresql/data
     depends_on:
@@ -249,13 +258,13 @@ services:
     ports:
       - "3022:3000"
     environment:
-      - PORT=3000
-      - DATABASE_URL=postgresql://payment_user:payment_pass@payment-db:5432/payment_db
-      - DATABASE_REPLICA_URL=postgresql://payment_user:payment_pass@payment-db-replica:5432/payment_db
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
-      - BOOKING_URL=http://booking-lb:3021/tickets
-      - EVENT_URL=http://event-lb:3020/events
-      - SIMULATE_FAILURE_RATE=${SIMULATE_FAILURE_RATE:-0.1}
+      - PORT=${PORT}
+      - DATABASE_URL=${PAYMENT_DATABASE_URL}
+      - DATABASE_REPLICA_URL=${PAYMENT_DATABASE_REPLICA_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+      - BOOKING_URL=${BOOKING_URL}
+      - EVENT_URL=${EVENT_URL}
+      - SIMULATE_FAILURE_RATE=${SIMULATE_FAILURE_RATE}
     depends_on:
       payment-db:
         condition: service_healthy
@@ -267,11 +276,11 @@ services:
   payment-db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: payment_user
-      POSTGRES_PASSWORD: payment_pass
-      POSTGRES_DB: payment_db
+      - POSTGRES_USER=${PAYMENT_DB_USER}
+      - POSTGRES_PASSWORD=${PAYMENT_DB_PASSWORD}
+      - POSTGRES_DB=${PAYMENT_DB_NAME}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U payment_user -d payment_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${PAYMENT_DB_USER} -d ${PAYMENT_DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -282,11 +291,12 @@ services:
   payment-db-replica:
     build: ./services/payment/db-replica
     environment:
-      PGDATA: /var/lib/postgresql/data
-      PGPASSWORD: replicator
-      POSTGRES_USER: payment_user
-      POSTGRES_PASSWORD: payment_pass
-      POSTGRES_DB: payment_db
+      - PGDATA=/var/lib/postgresql/data
+      - PGPASSWORD=replicator
+      - POSTGRES_USER=${PAYMENT_DB_USER}
+      - POSTGRES_PASSWORD=${PAYMENT_DB_PASSWORD}
+      - POSTGRES_DB=${PAYMENT_DB_NAME}
+      - PRIMARY_HOST=payment-db
     volumes:
       - payment-pgreplica:/var/lib/postgresql/data
     depends_on:
@@ -297,10 +307,10 @@ services:
   payment-db-backup:
     image: postgres:16-alpine
     environment:
-      PAYMENT_DB_HOST: payment-db
-      PAYMENT_DB_USER: payment_user
-      PAYMENT_DB_NAME: payment_db
-      PAYMENT_DB_PASSWORD: payment_pass
+      - PAYMENT_DB_HOST=payment-db
+      - PAYMENT_DB_USER=${PAYMENT_DB_USER}
+      - PAYMENT_DB_NAME=${PAYMENT_DB_NAME}
+      - PAYMENT_DB_PASSWORD=${PAYMENT_DB_PASSWORD}
     volumes:
       - ./scripts/backup-payment.sh:/backup.sh
       - payment-backups:/backups
@@ -319,9 +329,9 @@ services:
     ports:
       - "3023:3000"
     environment:
-      - PORT=3000
-      - DATABASE_URL=postgresql://notif_user:notif_pass@notif-db:5432/notif_db
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - PORT=${PORT}
+      - DATABASE_URL=${NOTIFICATION_DATABASE_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
     depends_on:
       notif-db:
         condition: service_healthy
@@ -331,11 +341,11 @@ services:
   notif-db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: notif_user
-      POSTGRES_PASSWORD: notif_pass
-      POSTGRES_DB: notif_db
+      - POSTGRES_USER=${NOTIF_DB_USER}
+      - POSTGRES_PASSWORD=${NOTIF_DB_PASSWORD}
+      - POSTGRES_DB=${NOTIF_DB_NAME}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U notif_user -d notif_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIF_DB_USER} -d ${NOTIF_DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -346,11 +356,12 @@ services:
   notif-db-replica:
     build: ./services/notification/db-replica
     environment:
-      PGDATA: /var/lib/postgresql/data
-      PGPASSWORD: replicator
-      POSTGRES_USER: notif_user
-      POSTGRES_PASSWORD: notif_pass
-      POSTGRES_DB: notif_db
+      - PGDATA=/var/lib/postgresql/data
+      - PGPASSWORD=replicator
+      - POSTGRES_USER=${NOTIF_DB_USER}
+      - POSTGRES_PASSWORD=${NOTIF_DB_PASSWORD}
+      - POSTGRES_DB=${NOTIF_DB_NAME}
+      - PRIMARY_HOST=notif-db
     volumes:
       - notif-pgreplica:/var/lib/postgresql/data
     depends_on:
@@ -365,13 +376,13 @@ services:
     restart: on-failure
     build: ./services/gateway/api-gateway
     environment:
-      - PORT=3000
-      - JWT_SECRET=${JWT_SECRET:-changeme}
-      - USER_URL=http://user-lb:3010/users
-      - EVENT_URL=http://event-lb:3020/events
-      - AUTH_URL=http://auth-lb:3011/auth
-      - BOOKING_URL=http://booking-lb:3021/tickets
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - PORT=${PORT}
+      - JWT_SECRET=${JWT_SECRET}
+      - USER_URL=${USER_URL}
+      - EVENT_URL=${EVENT_URL}
+      - AUTH_URL=${AUTH_URL}
+      - BOOKING_URL=${BOOKING_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
     depends_on:
       - user-lb
       - event-lb
@@ -383,13 +394,13 @@ services:
     restart: on-failure
     build: ./services/gateway/api-gateway
     environment:
-      - PORT=3000
-      - JWT_SECRET=${JWT_SECRET:-changeme}
-      - USER_URL=http://user-lb:3010/users
-      - EVENT_URL=http://event-lb:3020/events
-      - AUTH_URL=http://auth-lb:3011/auth
-      - BOOKING_URL=http://booking-lb:3021/tickets
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - PORT=${PORT}
+      - JWT_SECRET=${JWT_SECRET}
+      - USER_URL=${USER_URL}
+      - EVENT_URL=${EVENT_URL}
+      - AUTH_URL=${AUTH_URL}
+      - BOOKING_URL=${BOOKING_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
     depends_on:
       - user-lb
       - event-lb
@@ -416,8 +427,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 10s

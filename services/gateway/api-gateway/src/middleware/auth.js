@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-prod';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export function requireAuth(req, res, next) {
     const header = req.headers.authorization;

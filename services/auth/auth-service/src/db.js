@@ -3,7 +3,7 @@ import pg from 'pg';
 const { Pool } = pg;
 
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://auth_user:auth_pass@auth-db:5432/auth_db',
+    connectionString: process.env.DATABASE_URL,
 });
 
 export async function initDb() {
