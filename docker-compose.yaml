@@ -1,0 +1,604 @@
+services:
+
+########################### FRONTEND + LB API GATEWAY #########################
+  nginx-bigbank:
+    container_name: nginx-bigbank
+    build:
+      context: ./loadbalancer/frontend
+      dockerfile: ./Dockerfile
+    ports:
+      - '80:80'
+    networks:
+      - BigBank
+    depends_on:
+      - bigbank
+      - bigbank2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  bigbank:
+    container_name: bigbank
+    build:
+      context: ./services/bigbank
+      dockerfile: ./Dockerfile
+    environment:
+      - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+    networks:
+      - BigBank
+    depends_on:
+      - loadbalancer-user-service
+      - loadbalancer-account-service
+      - loadbalancer-notification-service
+      # - loadbalancer-bigbank-admin
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  bigbank2:
+    container_name: bigbank2
+    build:
+      context: ./services/bigbank
+      dockerfile: ./Dockerfile
+    environment:
+      - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+    networks:
+      - BigBank
+    depends_on:
+      - loadbalancer-user-service
+      - loadbalancer-account-service
+      - loadbalancer-notification-service
+      # - loadbalancer-bigbank-admin
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+########################### BIGBANK ADMIN #####################################
+  # loadbalancer-bigbank-admin:
+  #   container_name: loadbalancer-bigbank-admin
+  #   build:
+  #     context: ./loadbalancer/loadbalancer-bigbank-admin
+  #     dockerfile: ./Dockerfile
+  #   networks:
+  #     - BigBank
+
+  bigbank-admin:
+    container_name: bigbank-admin
+    build:
+      context: ./services/bigbank-admin
+      dockerfile: ./Dockerfile
+    environment:
+      - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+    networks:
+      - BigBank
+    depends_on:
+      - loadbalancer-user-service
+      - loadbalancer-account-service
+      - loadbalancer-transaction-service
+
+  # bigbank-admin2:
+  #   container_name: bigbank-admin2
+  #   build:
+  #     context: ./services/bigbank-admin
+  #     dockerfile: ./Dockerfile
+  #   environment:
+  #     - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+  #   networks:
+  #     - BigBank
+
+########################### NOTIFICATION SERVICE ##############################
+  loadbalancer-notification-service:
+    container_name: loadbalancer-notification-service
+    build:
+      context: ./loadbalancer/loadbalancer-notification-service
+      dockerfile: ./Dockerfile
+    networks:
+      - BigBank
+    depends_on:
+      - notification-service
+      - notification-service2
+
+  notification-service:
+    container_name: notification-service
+    build:
+      context: ./services/notification-service
+      dockerfile: ./Dockerfile
+    environment:
+      - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+    networks:
+      - BigBank
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  notification-service2:
+    container_name: notification-service2
+    build:
+      context: ./services/notification-service
+      dockerfile: ./Dockerfile
+    environment:
+      - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+    networks:
+      - BigBank
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+########################### ACCOUNT SERVICE #################################
+  loadbalancer-account-service:
+    container_name: loadbalancer-account-service
+    build:
+      context: ./loadbalancer/loadbalancer-account-service
+      dockerfile: ./Dockerfile
+    networks:
+      - BigBank
+    depends_on:
+      - account-service
+      - account-service2
+
+  account-service:
+    container_name: account-service
+    build:
+      context: ./services/account-service
+      dockerfile: ./Dockerfile
+    environment:
+      - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+      - DB_HOST_WRITE=haproxy-account-db
+      - DB_PORT_WRITE=5432
+      - DB_HOST_READ=haproxy-account-db
+      - DB_PORT_READ=5433
+      - DB_NAME=${ACCOUNT_DB_NAME}
+      - DB_USER=${ACCOUNT_DB_USER}
+      - DB_PASSWORD=${ACCOUNT_DB_PASSWORD}
+    networks:
+      - BigBank
+    depends_on:
+      haproxy-account-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  account-service2:
+    container_name: account-service2
+    build:
+      context: ./services/account-service
+      dockerfile: ./Dockerfile
+    environment:
+      - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+      - DB_HOST_WRITE=haproxy-account-db
+      - DB_PORT_WRITE=5432
+      - DB_HOST_READ=haproxy-account-db
+      - DB_PORT_READ=5433
+      - DB_NAME=${ACCOUNT_DB_NAME}
+      - DB_USER=${ACCOUNT_DB_USER}
+      - DB_PASSWORD=${ACCOUNT_DB_PASSWORD}
+    networks:
+      - BigBank
+    depends_on:
+      haproxy-account-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+########################### ACCOUNT DB CLUSTER (Patroni + HAProxy) ############
+
+  haproxy-account-db:
+    container_name: haproxy-account-db
+    build:
+      context: ./loadbalancer/haproxy-db
+      dockerfile: ./Dockerfile
+      args:
+        CFG_FILE: haproxy-account.cfg
+    networks:
+      - BigBank
+    depends_on:
+      - account-db-1
+      - account-db-2
+      - account-db-3
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5432"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  account-db-1:
+    container_name: account-db-1
+    build:
+      context: ./patroni
+      dockerfile: ./Dockerfile
+    environment:
+      - PATRONI_SCOPE=account-cluster
+      - PATRONI_NAME=account-db-1
+      - PATRONI_CONNECT_HOST=account-db-1
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REPLICATION_USER=${REPLICATION_USER}
+      - REPLICATION_PASSWORD=${REPLICATION_PASSWORD}
+      - DB_NAME=${ACCOUNT_DB_NAME}
+      - DB_USER=${ACCOUNT_DB_USER}
+      - DB_PASSWORD=${ACCOUNT_DB_PASSWORD}
+    volumes:
+      - account-db-1-data:/var/lib/postgresql/data
+    networks:
+      - BigBank
+    depends_on:
+      etcd:
+        condition: service_healthy
+    restart: unless-stopped
+
+  account-db-2:
+    container_name: account-db-2
+    build:
+      context: ./patroni
+      dockerfile: ./Dockerfile
+    environment:
+      - PATRONI_SCOPE=account-cluster
+      - PATRONI_NAME=account-db-2
+      - PATRONI_CONNECT_HOST=account-db-2
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REPLICATION_USER=${REPLICATION_USER}
+      - REPLICATION_PASSWORD=${REPLICATION_PASSWORD}
+      - DB_NAME=${ACCOUNT_DB_NAME}
+      - DB_USER=${ACCOUNT_DB_USER}
+      - DB_PASSWORD=${ACCOUNT_DB_PASSWORD}
+    volumes:
+      - account-db-2-data:/var/lib/postgresql/data
+    networks:
+      - BigBank
+    depends_on:
+      etcd:
+        condition: service_healthy
+    restart: unless-stopped
+
+  account-db-3:
+    container_name: account-db-3
+    build:
+      context: ./patroni
+      dockerfile: ./Dockerfile
+    environment:
+      - PATRONI_SCOPE=account-cluster
+      - PATRONI_NAME=account-db-3
+      - PATRONI_CONNECT_HOST=account-db-3
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REPLICATION_USER=${REPLICATION_USER}
+      - REPLICATION_PASSWORD=${REPLICATION_PASSWORD}
+      - DB_NAME=${ACCOUNT_DB_NAME}
+      - DB_USER=${ACCOUNT_DB_USER}
+      - DB_PASSWORD=${ACCOUNT_DB_PASSWORD}
+    volumes:
+      - account-db-3-data:/var/lib/postgresql/data
+    networks:
+      - BigBank
+    depends_on:
+      etcd:
+        condition: service_healthy
+    restart: unless-stopped
+
+########################### USER SERVICE #################################
+  loadbalancer-user-service:
+    container_name: loadbalancer-user-service
+    build:
+      context: ./loadbalancer/loadbalancer-user-service
+      dockerfile: ./Dockerfile
+    networks:
+      - BigBank
+    depends_on:
+      - user-service
+      - user-service2
+
+  user-service:
+    container_name: user-service
+    build:
+      context: ./services/user-service
+      dockerfile: ./Dockerfile
+    environment:
+      - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+      - DB_HOST_WRITE=haproxy-user-db
+      - DB_PORT_WRITE=5432
+      - DB_HOST_READ=haproxy-user-db
+      - DB_PORT_READ=5433
+      - DB_NAME=${USER_DB_NAME}
+      - DB_USER=${USER_DB_USER}
+      - DB_PASSWORD=${USER_DB_PASSWORD}
+    networks:
+      - BigBank
+    depends_on:
+      haproxy-user-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  user-service2:
+    container_name: user-service2
+    build:
+      context: ./services/user-service
+      dockerfile: ./Dockerfile
+    environment:
+      - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+      - DB_HOST_WRITE=haproxy-user-db
+      - DB_PORT_WRITE=5432
+      - DB_HOST_READ=haproxy-user-db
+      - DB_PORT_READ=5433
+      - DB_NAME=${USER_DB_NAME}
+      - DB_USER=${USER_DB_USER}
+      - DB_PASSWORD=${USER_DB_PASSWORD}
+    networks:
+      - BigBank
+    depends_on:
+      haproxy-user-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+########################### USER DB CLUSTER (Patroni + HAProxy) ###############
+
+  haproxy-user-db:
+    container_name: haproxy-user-db
+    build:
+      context: ./loadbalancer/haproxy-db
+      dockerfile: ./Dockerfile
+      args:
+        CFG_FILE: haproxy-user.cfg
+    networks:
+      - BigBank
+    depends_on:
+      - user-db-1
+      - user-db-2
+      - user-db-3
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5432"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  user-db-1:
+    container_name: user-db-1
+    build:
+      context: ./patroni
+      dockerfile: ./Dockerfile
+    environment:
+      - PATRONI_SCOPE=user-cluster
+      - PATRONI_NAME=user-db-1
+      - PATRONI_CONNECT_HOST=user-db-1
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REPLICATION_USER=${REPLICATION_USER}
+      - REPLICATION_PASSWORD=${REPLICATION_PASSWORD}
+      - DB_NAME=${USER_DB_NAME}
+      - DB_USER=${USER_DB_USER}
+      - DB_PASSWORD=${USER_DB_PASSWORD}
+    volumes:
+      - user-db-1-data:/var/lib/postgresql/data
+    networks:
+      - BigBank
+    depends_on:
+      etcd:
+        condition: service_healthy
+    restart: unless-stopped
+
+  user-db-2:
+    container_name: user-db-2
+    build:
+      context: ./patroni
+      dockerfile: ./Dockerfile
+    environment:
+      - PATRONI_SCOPE=user-cluster
+      - PATRONI_NAME=user-db-2
+      - PATRONI_CONNECT_HOST=user-db-2
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REPLICATION_USER=${REPLICATION_USER}
+      - REPLICATION_PASSWORD=${REPLICATION_PASSWORD}
+      - DB_NAME=${USER_DB_NAME}
+      - DB_USER=${USER_DB_USER}
+      - DB_PASSWORD=${USER_DB_PASSWORD}
+    volumes:
+      - user-db-2-data:/var/lib/postgresql/data
+    networks:
+      - BigBank
+    depends_on:
+      etcd:
+        condition: service_healthy
+    restart: unless-stopped
+
+  user-db-3:
+    container_name: user-db-3
+    build:
+      context: ./patroni
+      dockerfile: ./Dockerfile
+    environment:
+      - PATRONI_SCOPE=user-cluster
+      - PATRONI_NAME=user-db-3
+      - PATRONI_CONNECT_HOST=user-db-3
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REPLICATION_USER=${REPLICATION_USER}
+      - REPLICATION_PASSWORD=${REPLICATION_PASSWORD}
+      - DB_NAME=${USER_DB_NAME}
+      - DB_USER=${USER_DB_USER}
+      - DB_PASSWORD=${USER_DB_PASSWORD}
+    volumes:
+      - user-db-3-data:/var/lib/postgresql/data
+    networks:
+      - BigBank
+    depends_on:
+      etcd:
+        condition: service_healthy
+    restart: unless-stopped
+
+########################### TRANSACTION SERVICE ##############################
+  loadbalancer-transaction-service:
+    container_name: loadbalancer-transaction-service
+    build:
+      context: ./loadbalancer/loadbalancer-transaction-service
+      dockerfile: ./Dockerfile
+    networks:
+      - BigBank
+    depends_on:
+      - transaction-service
+      - transaction-service2
+
+  transaction-service:
+    container_name: transaction-service
+    build:
+      context: ./services/transaction-service
+      dockerfile: ./Dockerfile
+    environment:
+      - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - ACCOUNT_SERVICE_URL=http://loadbalancer-account-service/accounts
+    networks:
+      - BigBank
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  transaction-service2:
+    container_name: transaction-service2
+    build:
+      context: ./services/transaction-service
+      dockerfile: ./Dockerfile
+    environment:
+      - ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - ACCOUNT_SERVICE_URL=http://loadbalancer-account-service/accounts
+    networks:
+      - BigBank
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+########################### ETCD (DCS pour Patroni) ##########################
+# Note: en production, déployer 3 nœuds etcd pour le quorum
+
+  etcd:
+    container_name: etcd
+    image: gcr.io/etcd-development/etcd:v3.5.12
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd
+      - --data-dir=/var/lib/etcd
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --initial-cluster=etcd=http://etcd:2380
+    volumes:
+      - etcd-data:/var/lib/etcd
+    networks:
+      - BigBank
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/etcdctl", "--endpoints=http://localhost:2379", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+########################### ZIPKIN #####################################
+
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - BigBank
+
+### POUR PREPARER LA SUITE ###
+
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3-management-alpine
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+    networks:
+      - BigBank
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+#  bigbank-admin-db:
+#   container_name: bigbank-admin-db
+#   image: postgres:15-alpine
+#   networks:
+#     - databases
+#   environment:
+#     POSTGRES_USER: bigbank-admin
+#     POSTGRES_PASSWORD: bigbank-admin
+#     POSTGRES_DB: bigbank-admin
+#   volumes:
+#     - bigbank-admin-db-data:/var/lib/postgresql/data
+
+#  account-service-db:
+#   container_name: account-service-db
+#   image: postgres:15-alpine
+#   networks:
+#     - databases
+#   environment:
+#     POSTGRES_USER: account-service
+#     POSTGRES_PASSWORD: account-service
+#     POSTGRES_DB: account-service
+#   volumes:
+#     - account-service-db-data:/var/lib/postgresql/data
+
+#  notification-service-db:
+#   container_name: notification-service-db
+#   image: postgres:15-alpine
+#   networks:
+#     - databases
+#   environment:
+#     POSTGRES_USER: notification-service
+#     POSTGRES_PASSWORD: notification-service
+#     POSTGRES_DB: notification-service
+#   volumes:
+#     - notification-service-db-data:/var/lib/postgresql/data
+
+#  transaction-service-db:
+#   container_name: transaction-service-db
+#   image: postgres:15-alpine
+#   networks:
+#     - databases
+#   environment:
+#     POSTGRES_USER: transaction-service
+#     POSTGRES_PASSWORD: transaction-service
+#     POSTGRES_DB: transaction-service
+#   volumes:
+#     - transaction-service-db-data:/var/lib/postgresql/data
+
+#  user-service-db:
+#   container_name: user-service-db
+#   image: postgres:15-alpine
+#   networks:
+#     - databases
+#   environment:
+#     POSTGRES_USER: user-service
+#     POSTGRES_PASSWORD: user-service
+#     POSTGRES_DB: user-service
+#   volumes:
+#     - user-service-db-data:/var/lib/postgresql/data
+
+networks:
+  BigBank:
+    driver: bridge
+  databases:
+    driver: bridge
+
+volumes:
+  etcd-data:
+  account-db-1-data:
+  account-db-2-data:
+  account-db-3-data:
+  user-db-1-data:
+  user-db-2-data:
+  user-db-3-data:
