@@ -23,13 +23,25 @@
         const payload = getPayload();
         document.getElementById('nav-auth').style.display = token ? 'none' : '';
         document.getElementById('nav-user').style.display = token ? '' : 'none';
-        document.getElementById('nav-admin').style.display = (payload && payload.role === 'admin') ? '' : 'none';
+        document.getElementById('nav-admin').style.display = (payload && (payload.role === 'admin' || payload.role === 'operator')) ? '' : 'none';
     }
 
     function showMsg(id, text, ok) {
         const el = document.getElementById(id);
         el.className = 'message ' + (ok ? 'success' : 'error');
         el.textContent = text;
+    }
+
+    function errMsg(e) {
+        if (e && Array.isArray(e.errors)) return e.errors.map(err => err.message).join(', ');
+        if (e && e.error) {
+            try {
+                const parsed = JSON.parse(e.error);
+                if (Array.isArray(parsed)) return parsed.map(err => err.message).join(', ');
+            } catch (_) {}
+            return e.error;
+        }
+        return 'Une erreur est survenue.';
     }
 
     // ── HTTP helper ───────────────────────────────────────
@@ -42,7 +54,7 @@
                 ...(options.headers || {})
             }
         });
-        const data = await res.json();
+        const data = res.status !== 204 ? await res.json() : null;
         if (!res.ok) throw data;
         return data;
     }
@@ -98,7 +110,7 @@
             });
             showMsg('buy-msg', 'Réservation envoyée ! Vous recevrez une confirmation sous peu.', true);
         } catch (e) {
-            showMsg('buy-msg', e.error || 'Erreur lors de la réservation.', false);
+            showMsg('buy-msg', errMsg(e), false);
         }
     };
 
@@ -138,7 +150,7 @@
             updateNav();
             showPage('events');
         } catch (e) {
-            showMsg('login-msg', e.error || 'Identifiants invalides.', false);
+            showMsg('login-msg', errMsg(e), false);
         }
     };
 
@@ -158,7 +170,7 @@
             updateNav();
             showPage('events');
         } catch (e) {
-            showMsg('register-msg', e.error || "Erreur lors de l'inscription.", false);
+            showMsg('register-msg', errMsg(e), false);
         }
     };
 
@@ -177,11 +189,12 @@
             const events = result.data || result;
             if (!events.length) { list.innerHTML = '<p style="color:#8b949e">Aucun événement.</p>'; return; }
             list.innerHTML = events.map(e => `
-                <div class="card" style="margin-bottom:8px">
-                    <strong>${e.title}</strong> — ${e.availableTickets}/${e.maxCapacity} places · ${(e.priceInCents/100).toFixed(2)} €
-                    <span style="float:right">
-                        <button class="btn-secondary" onclick="adminDeleteEvent(${e.id})">Supprimer</button>
-                    </span>
+                <div class="card card-row">
+                    <div style="flex-grow:1"><strong>${e.title}</strong> — ${e.availableTickets}/${e.maxCapacity} places · ${(e.priceInCents/100).toFixed(2)} €</div>
+                    <div style="display:flex; gap:8px">
+                        <button class="btn-secondary" onclick="adminLoadTicketsByEvent(${e.id}, '${e.title.replace(/'/g, "\\'")}')">Billets</button>
+                        <button class="btn-secondary" style="border-color:#dc2626; color:#dc2626" onclick="adminDeleteEvent(${e.id})">Supprimer</button>
+                    </div>
                 </div>
             `).join('');
         } catch (e) {
@@ -192,13 +205,16 @@
     async function adminLoadUsers() {
         const list = document.getElementById('admin-users-list');
         try {
-            const result = await api('/auth/users');
+            const result = await api('/users');
             const users = result.data || result;
             if (!users.length) { list.innerHTML = '<p style="color:#8b949e">Aucun utilisateur.</p>'; return; }
             list.innerHTML = users.map(u => `
-                <div class="card" style="margin-bottom:8px">
-                    <strong>${u.firstname} ${u.lastname}</strong> — ${u.email}
-                    <span class="badge badge-${u.role}" style="margin-left:8px">${u.role}</span>
+                <div class="card card-row" style="margin-bottom:8px">
+                    <div style="flex-grow:1">
+                        <strong>${u.firstname} ${u.lastname}</strong> — ${u.email}
+                        <span class="badge badge-${u.role}" style="margin-left:8px">${u.role}</span>
+                    </div>
+                    <button class="btn-secondary" onclick="adminLoadTicketsByUser(${u.id}, '${u.firstname.replace(/'/g, "\\'")} ${u.lastname.replace(/'/g, "\\'")}')">Billets</button>
                 </div>
             `).join('');
         } catch (e) {
@@ -223,7 +239,7 @@
             showMsg('admin-event-msg', 'Événement créé !', true);
             adminLoadEvents();
         } catch (e) {
-            showMsg('admin-event-msg', e.error || 'Erreur lors de la création.', false);
+            showMsg('admin-event-msg', errMsg(e), false);
         }
     };
 
@@ -237,11 +253,71 @@
         }
     };
 
+    // ── Admin Tickets (New) ───────────────────────────────
+    window.adminLoadTicketsByEvent = async function (eventId, title) {
+        try {
+            const tickets = await api('/tickets/event/' + eventId);
+            renderAdminTickets(tickets, `Billets pour : ${title}`);
+        } catch (e) { alert(errMsg(e)); }
+    };
+
+    window.adminLoadTicketsByUser = async function (userId, name) {
+        try {
+            const tickets = await api('/tickets/user/' + userId);
+            renderAdminTickets(tickets, `Billets de : ${name}`);
+        } catch (e) { alert(errMsg(e)); }
+    };
+
+    window.adminLoadTicketById = async function () {
+        const id = document.getElementById('adm-ticket-id').value;
+        if (!id) return;
+        try {
+            const ticket = await api('/tickets/' + id);
+            renderAdminTickets([ticket], `Billet #${id}`);
+        } catch (e) { alert(errMsg(e)); }
+    };
+
+    function renderAdminTickets(tickets, title) {
+        const sec  = document.getElementById('admin-tickets-results-section');
+        const head = document.getElementById('admin-tickets-title');
+        const list = document.getElementById('admin-tickets-list');
+
+        head.textContent = title;
+        sec.style.display = 'block';
+        sec.scrollIntoView({ behavior: 'smooth' });
+
+        if (!tickets || !tickets.length || (tickets.length === 1 && !tickets[0].id)) {
+            list.innerHTML = '<p style="color:#8b949e">Aucun billet trouvé.</p>';
+            return;
+        }
+
+        list.innerHTML = tickets.map(t => `
+            <div class="card" style="border-style:dashed">
+                <div class="card-row">
+                    <div>
+                        <strong>Billet #${t.id}</strong> <span class="badge badge-${t.status}">${t.status}</span><br/>
+                        <small>Code: ${t.ticketCode}</small>
+                    </div>
+                    <div style="text-align:right">
+                        ${t.quantity} place(s) · ${(t.priceInCents/100).toFixed(2)} €<br/>
+                        <small>${new Date(t.createdAt).toLocaleString('fr-FR')}</small>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
     // Patch showPage to load admin data
     const _showPage = window.showPage;
     window.showPage = function (name) {
         _showPage(name);
-        if (name === 'admin') { adminLoadEvents(); adminLoadUsers(); }
+        if (name === 'admin') {
+            const payload = getPayload();
+            const isAdmin = payload && payload.role === 'admin';
+            document.getElementById('admin-users-section').style.display = isAdmin ? '' : 'none';
+            adminLoadEvents();
+            if (isAdmin) adminLoadUsers();
+        }
     };
 
     // ── Init ──────────────────────────────────────────────

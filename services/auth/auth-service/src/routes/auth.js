@@ -10,8 +10,8 @@ router.post('/register', async (req, res) => {
         const result = await authService.register(data);
         res.status(201).json(result);
     } catch (err) {
-        if (err.errors) {
-            return res.status(400).json({ errors: err.errors });
+        if (err.issues) {
+            return res.status(400).json({ errors: err.issues });
         }
         res.status(err.status || 500).json({ error: err.message });
     }
@@ -23,20 +23,11 @@ router.post('/login', async (req, res) => {
         const result = await authService.login(data);
         res.json(result);
     } catch (err) {
-        if (err.errors) {
-            return res.status(400).json({ errors: err.errors });
+        if (err.issues) {
+            return res.status(400).json({ errors: err.issues });
         }
         res.status(err.status || 500).json({ error: err.message });
     }
 });
 
 export default router;
-
-router.get('/users', async (req, res) => {
-    try {
-        const users = await authService.getAllUsers();
-        res.json(users);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});

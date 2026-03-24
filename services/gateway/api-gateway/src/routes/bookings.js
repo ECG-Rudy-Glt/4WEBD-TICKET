@@ -1,11 +1,12 @@
 import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
 import { createBookingSchema } from '../schemas/booking.schema.js';
 import { publishBooking } from '../services/queue.service.js';
 import * as eventService from '../services/event.service.js';
 
 const router = Router();
 
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
     try {
         const data  = createBookingSchema.parse(req.body);
         const event = await eventService.getEventById(data.eventId);
@@ -44,8 +45,8 @@ router.post('/', async (req, res) => {
             data
         });
     } catch (err) {
-        if (err.errors) {
-            return res.status(400).json({ errors: err.errors });
+        if (err.issues) {
+            return res.status(400).json({ errors: err.issues });
         }
         res.status(err.status || 500).json({ error: err.message });
     }

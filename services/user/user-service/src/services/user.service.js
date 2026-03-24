@@ -32,6 +32,14 @@ export async function getAllUsers(role) {
     return res.rows.map(sanitize);
 }
 
+export async function getUserByEmail(email) {
+    const res = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (!res.rows.length) {
+        throw { status: 404, message: "Utilisateur non trouvé" };
+    }
+    return res.rows[0]; // password inclus — usage interne auth-service
+}
+
 export async function getUserById(id) {
     const res = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (!res.rows.length) {

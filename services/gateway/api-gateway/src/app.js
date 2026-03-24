@@ -7,6 +7,8 @@ import eventRoutes from './routes/events.js';
 import bookingRoutes from './routes/bookings.js';
 import ticketRoutes from './routes/tickets.js';
 import { connectQueue } from './services/queue.service.js';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './swagger.js';
 
 const app = express();
 
@@ -26,6 +28,8 @@ app.use('/users', userRoutes);
 app.use('/events', eventRoutes);
 app.use('/bookings', bookingRoutes);
 app.use('/tickets', ticketRoutes);
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.get('/', (req, res) => {
     res.json({ message: "TicketApp API Gateway v1.0" });

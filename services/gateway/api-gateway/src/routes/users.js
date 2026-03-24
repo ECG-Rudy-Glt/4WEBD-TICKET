@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 import { createUserSchema, updateUserSchema } from '../schemas/user.schema.js';
 import * as userService from '../services/user.service.js';
 
@@ -10,14 +11,14 @@ router.post('/', async (req, res) => {
         const user = await userService.createUser(data);
         res.status(201).json(user);
     } catch (err) {
-        if (err.errors) {
-            return res.status(400).json({ errors: err.errors });
+        if (err.issues) {
+            return res.status(400).json({ errors: err.issues });
         }
         res.status(err.status || 500).json({ error: err.message });
     }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, requireRole('admin'), async (req, res) => {
     try {
         const page  = parseInt(req.query.page)  || 1;
         const limit = parseInt(req.query.limit) || 10;
@@ -55,8 +56,8 @@ router.put('/:id', async (req, res) => {
         const user = await userService.updateUser(parseInt(req.params.id), data);
         res.json(user);
     } catch (err) {
-        if (err.errors) {
-            return res.status(400).json({ errors: err.errors });
+        if (err.issues) {
+            return res.status(400).json({ errors: err.issues });
         }
         res.status(err.status || 500).json({ error: err.message });
     }

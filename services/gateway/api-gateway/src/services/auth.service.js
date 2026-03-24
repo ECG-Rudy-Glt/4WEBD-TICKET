@@ -7,7 +7,7 @@ export async function register(data) {
         body: JSON.stringify(data)
     });
     const body = await response.json();
-    if (!response.ok) throw { status: response.status, message: body.error || body.message };
+    if (!response.ok) throw { status: response.status, message: body.error || body.message, errors: body.errors };
     return body;
 }
 
@@ -18,12 +18,6 @@ export async function login(data) {
         body: JSON.stringify(data)
     });
     const body = await response.json();
-    if (!response.ok) throw { status: response.status, message: body.error || body.message };
+    if (!response.ok) throw { status: response.status, message: body.error || body.message, errors: body.errors };
     return body;
-}
-
-export async function getAllUsers() {
-    const response = await fetch(`${AUTH_URL}/users`);
-    const body = await response.json();
-    return Array.isArray(body) ? body : (body.data || []);
 }

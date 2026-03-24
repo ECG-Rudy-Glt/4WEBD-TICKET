@@ -5,28 +5,29 @@ services:
   # -------------------------------------------------------
 
   auth-service-1:
+    restart: on-failure
     build: ./services/auth/auth-service
     environment:
       - PORT=3000
-      - DATABASE_URL=postgresql://auth_user:auth_pass@auth-db:5432/auth_db
-      - DATABASE_REPLICA_URL=postgresql://auth_user:auth_pass@auth-db-replica:5432/auth_db
       - JWT_SECRET=${JWT_SECRET:-changeme}
+      - USER_URL=http://user-lb:3010/users
     depends_on:
-      auth-db:
-        condition: service_healthy
+      user-lb:
+        condition: service_started
 
   auth-service-2:
+    restart: on-failure
     build: ./services/auth/auth-service
     environment:
       - PORT=3000
-      - DATABASE_URL=postgresql://auth_user:auth_pass@auth-db:5432/auth_db
-      - DATABASE_REPLICA_URL=postgresql://auth_user:auth_pass@auth-db-replica:5432/auth_db
       - JWT_SECRET=${JWT_SECRET:-changeme}
+      - USER_URL=http://user-lb:3010/users
     depends_on:
-      auth-db:
-        condition: service_healthy
+      user-lb:
+        condition: service_started
 
   auth-lb:
+    restart: unless-stopped
     build: ./services/auth/lb
     ports:
       - "3011:3011"
@@ -34,40 +35,14 @@ services:
       - auth-service-1
       - auth-service-2
 
-  auth-db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: auth_user
-      POSTGRES_PASSWORD: auth_pass
-      POSTGRES_DB: auth_db
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    volumes:
-      - auth-pgdata:/var/lib/postgresql/data
-      - ./services/auth/db/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
 
-  auth-db-replica:
-    build: ./services/auth/db-replica
-    environment:
-      PGDATA: /var/lib/postgresql/data
-      PGPASSWORD: replicator
-      POSTGRES_USER: auth_user
-      POSTGRES_PASSWORD: auth_pass
-      POSTGRES_DB: auth_db
-    volumes:
-      - auth-pgreplica:/var/lib/postgresql/data
-    depends_on:
-      auth-db:
-        condition: service_healthy
 
   # -------------------------------------------------------
   # user-service (x2 + LB + DB primary/replica)
   # -------------------------------------------------------
 
   user-service-1:
+    restart: on-failure
     build: ./services/user/user-service
     environment:
       - PORT=3000
@@ -78,6 +53,7 @@ services:
         condition: service_healthy
 
   user-service-2:
+    restart: on-failure
     build: ./services/user/user-service
     environment:
       - PORT=3000
@@ -88,12 +64,15 @@ services:
         condition: service_healthy
 
   user-lb:
+    restart: unless-stopped
     build: ./services/user/lb
     ports:
       - "3010:3010"
     depends_on:
-      - user-service-1
-      - user-service-2
+      user-service-1:
+        condition: service_started
+      user-service-2:
+        condition: service_started
 
   user-db:
     image: postgres:16-alpine
@@ -129,6 +108,7 @@ services:
   # -------------------------------------------------------
 
   event-service-1:
+    restart: on-failure
     build: ./services/event/event-service
     environment:
       - PORT=3000
@@ -139,6 +119,7 @@ services:
         condition: service_healthy
 
   event-service-2:
+    restart: on-failure
     build: ./services/event/event-service
     environment:
       - PORT=3000
@@ -149,6 +130,7 @@ services:
         condition: service_healthy
 
   event-lb:
+    restart: unless-stopped
     build: ./services/event/lb
     ports:
       - "3020:3020"
@@ -190,6 +172,7 @@ services:
   # -------------------------------------------------------
 
   booking-service-1:
+    restart: on-failure
     build: ./services/booking/booking-service
     environment:
       - PORT=3000
@@ -204,6 +187,7 @@ services:
         condition: service_healthy
 
   booking-service-2:
+    restart: on-failure
     build: ./services/booking/booking-service
     environment:
       - PORT=3000
@@ -218,6 +202,7 @@ services:
         condition: service_healthy
 
   booking-lb:
+    restart: unless-stopped
     build: ./services/booking/lb
     ports:
       - "3021:3021"
@@ -259,6 +244,7 @@ services:
   # -------------------------------------------------------
 
   payment-service:
+    restart: on-failure
     build: ./services/payment/payment-service
     ports:
       - "3022:3000"
@@ -307,11 +293,28 @@ services:
       payment-db:
         condition: service_healthy
 
+
+  payment-db-backup:
+    image: postgres:16-alpine
+    environment:
+      PAYMENT_DB_HOST: payment-db
+      PAYMENT_DB_USER: payment_user
+      PAYMENT_DB_NAME: payment_db
+      PAYMENT_DB_PASSWORD: payment_pass
+    volumes:
+      - ./scripts/backup-payment.sh:/backup.sh
+      - payment-backups:/backups
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    depends_on:
+      payment-db:
+        condition: service_healthy
+
   # -------------------------------------------------------
   # notification-service (x1 + DB)
   # -------------------------------------------------------
 
   notification-service:
+    restart: on-failure
     build: ./services/notification/notification-service
     ports:
       - "3023:3000"
@@ -359,9 +362,11 @@ services:
   # -------------------------------------------------------
 
   api-gateway-1:
+    restart: on-failure
     build: ./services/gateway/api-gateway
     environment:
       - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-changeme}
       - USER_URL=http://user-lb:3010/users
       - EVENT_URL=http://event-lb:3020/events
       - AUTH_URL=http://auth-lb:3011/auth
@@ -375,9 +380,11 @@ services:
       - rabbitmq
 
   api-gateway-2:
+    restart: on-failure
     build: ./services/gateway/api-gateway
     environment:
       - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-changeme}
       - USER_URL=http://user-lb:3010/users
       - EVENT_URL=http://event-lb:3020/events
       - AUTH_URL=http://auth-lb:3011/auth
@@ -391,6 +398,7 @@ services:
       - rabbitmq
 
   gateway-lb:
+    restart: unless-stopped
     build: ./services/gateway/lb
     ports:
       - "3030:3030"
@@ -430,8 +438,6 @@ services:
       - gateway-lb
 
 volumes:
-  auth-pgdata:
-  auth-pgreplica:
   user-pgdata:
   user-pgreplica:
   event-pgdata:
@@ -440,6 +446,7 @@ volumes:
   booking-pgreplica:
   payment-pgdata:
   payment-pgreplica:
+  payment-backups:
   notif-pgdata:
   notif-pgreplica:
   rabbitmqdata:

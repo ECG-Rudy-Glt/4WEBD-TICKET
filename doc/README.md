@@ -28,11 +28,11 @@ Step 2: Questions
 
 Student questions
 
-Y a t il une technologie ou architecture particuliere => Pas de techno particuliere / Architecture Micro Service
-Cas d'usage specifiques comme types d events => Chaque event a un nombre de place max (pas de survente)
-System d'auth => Admin, EventCreator - Operator, User (listing de tous les achats / billets), User
+<!-- Y a t il une technologie ou architecture particuliere => Pas de techno particuliere / Architecture Micro Service -->
+<!-- Cas d'usage specifiques comme types d events => Chaque event a un nombre de place max (pas de survente) -->
+<!-- System d'auth => Admin, EventCreator - Operator, User (listing de tous les achats / billets), User -->
 System de langue => Anglais / France (pas besoin d internationalization)
-Ticket numerote => pour de la securite on doit pouvoir matcher le ticket avec l'utilisateur
+<!-- Ticket numerote => pour de la securite on doit pouvoir matcher le ticket avec l'utilisateur -->
 Contraintes techniques => Pas de temps minimal (-300ms)
 Contraintes legals => backup a interval regulier la base payment
 BDD security => pas de mdp en clair.

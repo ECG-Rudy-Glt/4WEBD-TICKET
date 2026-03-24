@@ -10,8 +10,8 @@ router.post('/', async (req, res) => {
         const user = await userService.createUser(data);
         res.status(201).json(user);
     } catch (err) {
-        if (err.errors) {
-            return res.status(400).json({ errors: err.errors });
+        if (err.issues) {
+            return res.status(400).json({ errors: err.issues });
         }
         res.status(err.status || 500).json({ error: err.message });
     }
@@ -41,6 +41,15 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.get('/by-email/:email', async (req, res) => {
+    try {
+        const result = await userService.getUserByEmail(req.params.email);
+        res.json(result); // password inclus — usage interne auth-service uniquement
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+});
+
 router.get('/me', async (req, res) => {
     try {
         const userId = parseInt(req.headers['x-user-id']);
@@ -67,8 +76,8 @@ router.put('/:id', async (req, res) => {
         const user = await userService.updateUser(parseInt(req.params.id), data);
         res.json(user);
     } catch (err) {
-        if (err.errors) {
-            return res.status(400).json({ errors: err.errors });
+        if (err.issues) {
+            return res.status(400).json({ errors: err.issues });
         }
         res.status(err.status || 500).json({ error: err.message });
     }

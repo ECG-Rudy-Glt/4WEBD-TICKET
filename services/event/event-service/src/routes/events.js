@@ -10,7 +10,7 @@ router.post('/', async (req, res) => {
         const event = await eventService.createEvent(data);
         res.status(201).json(event);
     } catch (err) {
-        if (err.errors) return res.status(400).json({ errors: err.errors });
+        if (err.issues) return res.status(400).json({ errors: err.issues });
         res.status(err.status || 500).json({ error: err.message });
     }
 });
@@ -45,7 +45,7 @@ router.put('/:id', async (req, res) => {
         const event = await eventService.updateEvent(parseInt(req.params.id), data);
         res.json(event);
     } catch (err) {
-        if (err.errors) return res.status(400).json({ errors: err.errors });
+        if (err.issues) return res.status(400).json({ errors: err.issues });
         res.status(err.status || 500).json({ error: err.message });
     }
 });

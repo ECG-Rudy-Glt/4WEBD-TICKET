@@ -121,10 +121,30 @@
                 <div id="admin-events-list">Chargement...</div>
             </div>
 
-            <!-- Liste des utilisateurs -->
-            <div class="card">
+            <!-- Liste des utilisateurs (admin uniquement) -->
+            <div class="card" id="admin-users-section">
                 <h2>Utilisateurs</h2>
                 <div id="admin-users-list">Chargement...</div>
+            </div>
+            
+            <!-- Chercher un billet par ID -->
+            <div class="card">
+                <h2>Chercher un billet</h2>
+                <div class="card-row" style="margin-bottom: 1rem;">
+                    <input type="number" id="adm-ticket-id" placeholder="ID du billet" style="width: 100%; padding: 0.6rem; border-radius: 6px; border: 1px solid #d1d5db;" />
+                    <button class="btn-primary" style="width: auto; margin-top: 0;" onclick="adminLoadTicketById()">Chercher</button>
+                </div>
+            </div>
+
+            <!-- Résultats de recherche de billets -->
+            <div id="admin-tickets-results-section" style="display:none">
+                <div class="card">
+                    <div class="card-row">
+                        <h2 id="admin-tickets-title">Billets</h2>
+                        <button class="btn-secondary" onclick="document.getElementById('admin-tickets-results-section').style.display='none'">Fermer</button>
+                    </div>
+                    <div id="admin-tickets-list"></div>
+                </div>
             </div>
         </section>
 
