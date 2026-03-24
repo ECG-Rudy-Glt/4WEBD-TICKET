@@ -1,0 +1,36 @@
+import pg from 'pg';
+
+const { Pool } = pg;
+
+const primaryPool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://auth_user:auth_pass@localhost:5432/auth_db',
+});
+
+const replicaPool = new Pool({
+  connectionString: process.env.DATABASE_REPLICA_URL || process.env.DATABASE_URL,
+});
+
+export async function initDb() {
+  const client = await primaryPool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id          SERIAL PRIMARY KEY,
+        firstname   VARCHAR(100) NOT NULL,
+        lastname    VARCHAR(100) NOT NULL,
+        email       VARCHAR(255) UNIQUE NOT NULL,
+        phone       VARCHAR(20),
+        password    VARCHAR(255) NOT NULL,
+        role        VARCHAR(20) NOT NULL DEFAULT 'user',
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    console.log('[auth-service] DB initialisée');
+  } finally {
+    client.release();
+  }
+}
+
+export default primaryPool;
+export { replicaPool };
