@@ -2,79 +2,68 @@
 
 ## Vue d'ensemble
 
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                  CLIENT                                       │
-│                           http://localhost:8080                               │
-│                             [ Frontend ]                                      │
-│                          HTML / CSS / JS (nginx)                              │
-└────────────────────────────────┬─────────────────────────────────────────────┘
-                                 │ HTTP
-                                 ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                          GATEWAY LOAD BALANCER                                │
-│                           http://localhost:3030                               │
-│                           [ gateway-lb ] (nginx)                              │
-│                             round-robin ×2                                    │
-└───────────────┬──────────────────────────────────────┬────────────────────────┘
-                │                                      │
-         ┌──────▼──────┐                      ┌────────▼────┐
-         │api-gateway-1│                      │api-gateway-2│
-         │  (Express)  │                      │  (Express)  │
-         └──────┬───────┘                      └──────┬──────┘
-                └──────────────────┬────────────────────┘
-                                   │ fetch()                    publish()
-            ┌──────────────────────┼──────────────────────┐─────────────────┐
-            │                      │                       │                 │
-            ▼                      ▼                       ▼                 ▼
-     [ auth-lb ]            [ user-lb ]            [ event-lb ]         RabbitMQ
-     :3011 nginx             :3010 nginx            :3020 nginx
-     r-robin ×2              r-robin ×2             r-robin ×2
-          │                       │                      │
-     ┌────┴────┐             ┌────┴────┐            ┌────┴────┐
-     │auth-svc │             │user-svc │            │event-svc│
-     │  ×2     │             │  ×2     │            │  ×2     │
-     └────┬────┘             └────┬────┘            └────┬────┘
-          │                       │                      │
-  ┌───────┴──────┐      ┌─────────┴────┐      ┌─────────┴────┐
-  │  auth-db (W) │      │  user-db (W) │      │  event-db (W)│
-  │  auth-rep (R)│      │  user-rep (R)│      │  event-rep(R)│
-  └──────────────┘      └──────────────┘      └──────────────┘
+```mermaid
+graph TD
+    User((Utilisateur)) --> N[Nginx Frontal]
+    
+    subgraph "Couche Présentation"
+        N --> FE[Frontend SPA]
+        N -- "/api" --> GWLB[Gateway LB]
+        GWLB --> GW[API Gateway Replicas]
+    end
 
-                         RabbitMQ
-                         queue: "bookings"
-                              │
-                              ▼
-                      [ booking-lb ] :3021
-                      round-robin ×2
-                           │
-                      ┌────┴────┐
-                      │book-svc │
-                      │  ×2     │
-                      └────┬────┘
-                           │
-                  ┌────────┴──────┐
-                  │ booking-db (W)│   publish → queue: "payments"
-                  │ booking-rep(R)│
-                  └───────────────┘
-                                              │
-                                              ▼
-                                    [ payment-svc ] :3022 (×1)
-                                           │
-                                  ┌────────┴───────┐
-                                  │ payment-db (W) │   publish → queue: "notifications"
-                                  │ payment-rep (R)│
-                                  └────────────────┘
-                                                              │
-                                                              ▼
-                                                  [ notification-svc ] :3023 (×1)
-                                                           │
-                                                  ┌────────┴──────┐
-                                                  │  notif-db (W) │
-                                                  │  notif-rep (R)│
-                                                  └───────────────┘
-```
+    subgraph "Load Balancers Internes"
+        GW --> ALB[Auth LB]
+        GW --> ULB[User LB]
+        GW --> ELB[Event LB]
+        GW --> BLB[Booking LB]
+        GW --> PLB[Payment LB]
+    end
 
+    subgraph "Microservices (Logique Métier)"
+        ALB --> AS[Auth Service Replicas]
+        ULB --> US[User Service Replicas]
+        ELB --> ES[Event Service Replicas]
+        BLB --> BS[Booking Service Replicas]
+        PLB --> PS[Payment Service Replicas]
+        GW -.-> NS[Notification Service]
+    end
+
+    subgraph "Infrastructure Partagée"
+        RMQ[RabbitMQ Broker]
+        RED[Redis Cache]
+        ZIP[Zipkin Tracing]
+    end
+
+    subgraph "Silos de Données (Patroni / Slave)"
+        subgraph "Silos Critiques (HA)"
+            BS --> RED
+            BDB[(Booking Cluster Patroni)]
+            PDB[(Payment Cluster Patroni)]
+            ETC{ETCD Cluster}
+            BDB & PDB --- ETC
+        end
+        
+        subgraph "Silos Standards"
+            ADB[(Auth DB Slave)]
+            UDB[(User DB Slave)]
+            EDB[(Event DB Slave)]
+            NDB[(Notif DB Slave)]
+        end
+        
+        PGB[PgBouncer Layer]
+    end
+
+    %% Connexions Logical
+    AS & US & ES & BS & PS & NS --- PGB
+    PGB --- ADB & UDB & EDB & NDB & BDB & PDB
+    
+    PS -- "Queue" --> RMQ
+    RMQ -- "Sync" --> BS & ES
+    
+    %% Observabilité
+    AS & US & ES & BS & PS & NS -.-> ZIP
+```
 ## Flow de réservation (queue)
 
 ```
