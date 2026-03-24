@@ -1,0 +1,867 @@
+# =============================================================
+# 4WEBD-TICKET — Docker Compose — Architecture complète
+#
+# Couches :
+#   Frontal     : 2x Nginx + 2x Frontend + 2x API Gateway
+#   App         : 6 services x 2 réplicas
+#   Proxy DB    : 6x PgBouncer (1 par silo)
+#   DB          : 2 silos critiques (Patroni HA 3 nœuds)
+#                 + 4 silos standards (Bitnami master/slave)
+#   Consensus   : 3x ETCD (pour Patroni)
+#   Msg & Cache : 1x RabbitMQ + 1x Redis
+#   Observabilité : 1x Zipkin
+#   Maintenance : 1x Cron Backup (payment)
+#
+# Point d'entrée : http://localhost (nginx frontal)
+# RabbitMQ UI     : http://localhost:15672
+# Zipkin UI       : http://localhost:9411
+# =============================================================
+
+services:
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 1 — FRONTAL (Nginx + Frontend)
+  # ═══════════════════════════════════════════════════════════
+
+  nginx:
+    build:
+      context: ./infra/nginx-frontal
+    ports:
+      - "80:80"
+    depends_on:
+      - api-gateway
+      - api-gateway-replica
+      - frontend
+      - frontend-replica
+    restart: unless-stopped
+
+  nginx-replica:
+    build:
+      context: ./infra/nginx-frontal
+    depends_on:
+      - api-gateway
+      - api-gateway-replica
+      - frontend
+      - frontend-replica
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./services/frontend/frontend-app
+    restart: unless-stopped
+
+  frontend-replica:
+    build:
+      context: ./services/frontend/frontend-app
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 2 — API GATEWAY (x2)
+  # ═══════════════════════════════════════════════════════════
+
+  api-gateway:
+    build:
+      context: ./services/gateway/api-gateway
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_URL: http://auth-service:3004
+      USER_URL: http://user-service:3001
+      EVENT_URL: http://event-service:3006
+      BOOKING_URL: http://booking-service:3003
+      PAYMENT_URL: http://payment-service:3005
+      NOTIFICATION_URL: http://notification-service:3002
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      event-service:
+        condition: service_started
+      booking-service:
+        condition: service_started
+    restart: unless-stopped
+
+  api-gateway-replica:
+    build:
+      context: ./services/gateway/api-gateway
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_URL: http://auth-service-replica:3004
+      USER_URL: http://user-service-replica:3001
+      EVENT_URL: http://event-service-replica:3006
+      BOOKING_URL: http://booking-service-replica:3003
+      PAYMENT_URL: http://payment-service-replica:3005
+      NOTIFICATION_URL: http://notification-service-replica:3002
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      auth-service-replica:
+        condition: service_started
+      user-service-replica:
+        condition: service_started
+      event-service-replica:
+        condition: service_started
+      booking-service-replica:
+        condition: service_started
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 3 — AUTH SERVICE (silo standard)
+  # ═══════════════════════════════════════════════════════════
+
+  auth-service:
+    build:
+      context: ./services/auth-service/src
+    environment:
+      PORT: 3004
+      DATABASE_URL: postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}
+      DATABASE_REPLICA_URL: postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}_readonly
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      auth-pgbouncer:
+        condition: service_started
+    restart: unless-stopped
+
+  auth-service-replica:
+    build:
+      context: ./services/auth-service/src
+    environment:
+      PORT: 3004
+      DATABASE_URL: postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}
+      DATABASE_REPLICA_URL: postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}_readonly
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      auth-pgbouncer:
+        condition: service_started
+    restart: unless-stopped
+
+  auth-pgbouncer:
+    image: bitnamilegacy/pgbouncer:latest
+    environment:
+      POSTGRESQL_HOST: auth-db
+      POSTGRESQL_USERNAME: auth_user
+      POSTGRESQL_PASSWORD: auth_pass
+      POSTGRESQL_DATABASE: auth_db
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: 200
+      PGBOUNCER_DEFAULT_POOL_SIZE: 20
+    volumes:
+      - ./infra/pgbouncer/auth/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+      - ./infra/pgbouncer/auth/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  auth-db:
+    image: bitnamilegacy/postgresql:16-debian-12
+    environment:
+      POSTGRESQL_USERNAME: ${AUTH_DB_USER:-auth_user}
+      POSTGRESQL_PASSWORD: ${AUTH_DB_PASSWORD:-auth_pass}
+      POSTGRESQL_DATABASE: ${AUTH_DB_NAME:-auth_db}
+      POSTGRESQL_REPLICATION_MODE: master
+      POSTGRESQL_REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-auth_user}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - auth-pgdata:/bitnami/postgresql
+    restart: unless-stopped
+
+  auth-db-replica:
+    image: bitnamilegacy/postgresql:16-debian-12
+    environment:
+      POSTGRESQL_REPLICATION_MODE: slave
+      POSTGRESQL_MASTER_HOST: auth-db
+      POSTGRESQL_MASTER_PORT_NUMBER: 5432
+      POSTGRESQL_USERNAME: ${AUTH_DB_USER:-auth_user}
+      POSTGRESQL_PASSWORD: ${AUTH_DB_PASSWORD:-auth_pass}
+      POSTGRESQL_REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    volumes:
+      - auth-pgreplica:/bitnami/postgresql
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 3 — USER SERVICE (silo standard)
+  # ═══════════════════════════════════════════════════════════
+
+  user-service:
+    build:
+      context: ./services/user-service/src
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}
+      DATABASE_REPLICA_URL: postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}_readonly
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      user-pgbouncer:
+        condition: service_started
+    restart: unless-stopped
+
+  user-service-replica:
+    build:
+      context: ./services/user-service/src
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}
+      DATABASE_REPLICA_URL: postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}_readonly
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      user-pgbouncer:
+        condition: service_started
+    restart: unless-stopped
+
+  user-pgbouncer:
+    image: bitnamilegacy/pgbouncer:latest
+    environment:
+      POSTGRESQL_HOST: user-db
+      POSTGRESQL_USERNAME: user_user
+      POSTGRESQL_PASSWORD: user_pass
+      POSTGRESQL_DATABASE: user_db
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: 200
+      PGBOUNCER_DEFAULT_POOL_SIZE: 20
+    volumes:
+      - ./infra/pgbouncer/user/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+      - ./infra/pgbouncer/user/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    depends_on:
+      user-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  user-db:
+    image: bitnamilegacy/postgresql:16-debian-12
+    environment:
+      POSTGRESQL_USERNAME: ${USER_DB_USER:-user_user}
+      POSTGRESQL_PASSWORD: ${USER_DB_PASSWORD:-user_pass}
+      POSTGRESQL_DATABASE: ${USER_DB_NAME:-user_db}
+      POSTGRESQL_REPLICATION_MODE: master
+      POSTGRESQL_REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${USER_DB_USER:-user_user}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - user-pgdata:/bitnami/postgresql
+    restart: unless-stopped
+
+  user-db-replica:
+    image: bitnamilegacy/postgresql:16-debian-12
+    environment:
+      POSTGRESQL_REPLICATION_MODE: slave
+      POSTGRESQL_MASTER_HOST: user-db
+      POSTGRESQL_MASTER_PORT_NUMBER: 5432
+      POSTGRESQL_USERNAME: ${USER_DB_USER:-user_user}
+      POSTGRESQL_PASSWORD: ${USER_DB_PASSWORD:-user_pass}
+      POSTGRESQL_REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+    depends_on:
+      user-db:
+        condition: service_healthy
+    volumes:
+      - user-pgreplica:/bitnami/postgresql
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 3 — EVENT SERVICE (silo standard)
+  # ═══════════════════════════════════════════════════════════
+
+  event-service:
+    build:
+      context: ./services/event-service/src
+    environment:
+      PORT: 3006
+      DATABASE_URL: postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}
+      DATABASE_REPLICA_URL: postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}_readonly
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      event-pgbouncer:
+        condition: service_started
+    restart: unless-stopped
+
+  event-service-replica:
+    build:
+      context: ./services/event-service/src
+    environment:
+      PORT: 3006
+      DATABASE_URL: postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}
+      DATABASE_REPLICA_URL: postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}_readonly
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      event-pgbouncer:
+        condition: service_started
+    restart: unless-stopped
+
+  event-pgbouncer:
+    image: bitnamilegacy/pgbouncer:latest
+    environment:
+      POSTGRESQL_HOST: event-db
+      POSTGRESQL_USERNAME: event_user
+      POSTGRESQL_PASSWORD: event_pass
+      POSTGRESQL_DATABASE: event_db
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: 200
+      PGBOUNCER_DEFAULT_POOL_SIZE: 20
+    volumes:
+      - ./infra/pgbouncer/event/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+      - ./infra/pgbouncer/event/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    depends_on:
+      event-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  event-db:
+    image: bitnamilegacy/postgresql:16-debian-12
+    environment:
+      POSTGRESQL_USERNAME: ${EVENT_DB_USER:-event_user}
+      POSTGRESQL_PASSWORD: ${EVENT_DB_PASSWORD:-event_pass}
+      POSTGRESQL_DATABASE: ${EVENT_DB_NAME:-event_db}
+      POSTGRESQL_REPLICATION_MODE: master
+      POSTGRESQL_REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EVENT_DB_USER:-event_user}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - event-pgdata:/bitnami/postgresql
+    restart: unless-stopped
+
+  event-db-replica:
+    image: bitnamilegacy/postgresql:16-debian-12
+    environment:
+      POSTGRESQL_REPLICATION_MODE: slave
+      POSTGRESQL_MASTER_HOST: event-db
+      POSTGRESQL_MASTER_PORT_NUMBER: 5432
+      POSTGRESQL_USERNAME: ${EVENT_DB_USER:-event_user}
+      POSTGRESQL_PASSWORD: ${EVENT_DB_PASSWORD:-event_pass}
+      POSTGRESQL_REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+    depends_on:
+      event-db:
+        condition: service_healthy
+    volumes:
+      - event-pgreplica:/bitnami/postgresql
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 3 — BOOKING SERVICE (silo critique — Patroni HA)
+  # ═══════════════════════════════════════════════════════════
+
+  booking-service:
+    build:
+      context: ./services/booking-service/src
+    environment:
+      PORT: 3003
+      DATABASE_URL: postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}
+      DATABASE_REPLICA_URL: postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}_readonly
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      EVENT_URL: http://event-service:3006
+    depends_on:
+      booking-pgbouncer:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  booking-service-replica:
+    build:
+      context: ./services/booking-service/src
+    environment:
+      PORT: 3003
+      DATABASE_URL: postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}
+      DATABASE_REPLICA_URL: postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}_readonly
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      EVENT_URL: http://event-service-replica:3006
+    depends_on:
+      booking-pgbouncer:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  booking-pgbouncer:
+    image: bitnamilegacy/pgbouncer:latest
+    environment:
+      POSTGRESQL_HOST: booking-db-1
+      POSTGRESQL_USERNAME: booking_user
+      POSTGRESQL_PASSWORD: booking_pass
+      POSTGRESQL_DATABASE: booking_db
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: 200
+      PGBOUNCER_DEFAULT_POOL_SIZE: 20
+    volumes:
+      - ./infra/pgbouncer/booking/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+      - ./infra/pgbouncer/booking/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    depends_on:
+      booking-db-1:
+        condition: service_started
+    restart: unless-stopped
+
+  # Patroni HA cluster — Booking (3 nœuds)
+  booking-db-1:
+    build:
+      context: ./patroni
+    environment:
+      PATRONI_SCOPE: booking-cluster
+      PATRONI_NAME: booking-db-1
+      PATRONI_PRIORITY: 100
+      PATRONI_CONNECT_HOST: booking-db-1
+      POSTGRES_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD:-postgres_pass}
+      REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+      DB_USER: ${BOOKING_DB_USER:-booking_user}
+      DB_PASSWORD: ${BOOKING_DB_PASSWORD:-booking_pass}
+      DB_NAME: ${BOOKING_DB_NAME:-booking_db}
+    volumes:
+      - booking-pgdata-1:/var/lib/postgresql/data
+    depends_on:
+      etcd-1:
+        condition: service_healthy
+      etcd-2:
+        condition: service_healthy
+      etcd-3:
+        condition: service_healthy
+    restart: unless-stopped
+
+  booking-db-2:
+    build:
+      context: ./patroni
+    environment:
+      PATRONI_SCOPE: booking-cluster
+      PATRONI_NAME: booking-db-2
+      PATRONI_PRIORITY: 50
+      PATRONI_CONNECT_HOST: booking-db-2
+      POSTGRES_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD:-postgres_pass}
+      REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+      DB_USER: ${BOOKING_DB_USER:-booking_user}
+      DB_PASSWORD: ${BOOKING_DB_PASSWORD:-booking_pass}
+      DB_NAME: ${BOOKING_DB_NAME:-booking_db}
+    volumes:
+      - booking-pgdata-2:/var/lib/postgresql/data
+    depends_on:
+      etcd-1:
+        condition: service_healthy
+      etcd-2:
+        condition: service_healthy
+      etcd-3:
+        condition: service_healthy
+    restart: unless-stopped
+
+  booking-db-3:
+    build:
+      context: ./patroni
+    environment:
+      PATRONI_SCOPE: booking-cluster
+      PATRONI_NAME: booking-db-3
+      PATRONI_PRIORITY: 50
+      PATRONI_CONNECT_HOST: booking-db-3
+      POSTGRES_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD:-postgres_pass}
+      REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+      DB_USER: ${BOOKING_DB_USER:-booking_user}
+      DB_PASSWORD: ${BOOKING_DB_PASSWORD:-booking_pass}
+      DB_NAME: ${BOOKING_DB_NAME:-booking_db}
+    volumes:
+      - booking-pgdata-3:/var/lib/postgresql/data
+    depends_on:
+      etcd-1:
+        condition: service_healthy
+      etcd-2:
+        condition: service_healthy
+      etcd-3:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 3 — PAYMENT SERVICE (silo critique — Patroni HA)
+  # ═══════════════════════════════════════════════════════════
+
+  payment-service:
+    build:
+      context: ./services/payment-service/src
+    environment:
+      PORT: 3005
+      DATABASE_URL: postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}
+      DATABASE_REPLICA_URL: postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}_readonly
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      BOOKING_URL: http://booking-service:3003
+      EVENT_URL: http://event-service:3006
+      SIMULATE_FAILURE_RATE: ${SIMULATE_FAILURE_RATE:-0}
+    depends_on:
+      payment-pgbouncer:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      booking-service:
+        condition: service_started
+    restart: unless-stopped
+
+  payment-service-replica:
+    build:
+      context: ./services/payment-service/src
+    environment:
+      PORT: 3005
+      DATABASE_URL: postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}
+      DATABASE_REPLICA_URL: postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}_readonly
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      BOOKING_URL: http://booking-service-replica:3003
+      EVENT_URL: http://event-service-replica:3006
+      SIMULATE_FAILURE_RATE: ${SIMULATE_FAILURE_RATE:-0}
+    depends_on:
+      payment-pgbouncer:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+      booking-service-replica:
+        condition: service_started
+    restart: unless-stopped
+
+  payment-pgbouncer:
+    image: bitnamilegacy/pgbouncer:latest
+    environment:
+      POSTGRESQL_HOST: payment-db-1
+      POSTGRESQL_USERNAME: payment_user
+      POSTGRESQL_PASSWORD: payment_pass
+      POSTGRESQL_DATABASE: payment_db
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: 200
+      PGBOUNCER_DEFAULT_POOL_SIZE: 20
+    volumes:
+      - ./infra/pgbouncer/payment/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+      - ./infra/pgbouncer/payment/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    depends_on:
+      payment-db-1:
+        condition: service_started
+    restart: unless-stopped
+
+  # Patroni HA cluster — Payment (3 nœuds)
+  payment-db-1:
+    build:
+      context: ./patroni
+    environment:
+      PATRONI_SCOPE: payment-cluster
+      PATRONI_NAME: payment-db-1
+      PATRONI_PRIORITY: 100
+      PATRONI_CONNECT_HOST: payment-db-1
+      POSTGRES_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD:-postgres_pass}
+      REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+      DB_USER: ${PAYMENT_DB_USER:-payment_user}
+      DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-payment_pass}
+      DB_NAME: ${PAYMENT_DB_NAME:-payment_db}
+    volumes:
+      - payment-pgdata-1:/var/lib/postgresql/data
+    depends_on:
+      etcd-1:
+        condition: service_healthy
+      etcd-2:
+        condition: service_healthy
+      etcd-3:
+        condition: service_healthy
+    restart: unless-stopped
+
+  payment-db-2:
+    build:
+      context: ./patroni
+    environment:
+      PATRONI_SCOPE: payment-cluster
+      PATRONI_NAME: payment-db-2
+      PATRONI_PRIORITY: 50
+      PATRONI_CONNECT_HOST: payment-db-2
+      POSTGRES_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD:-postgres_pass}
+      REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+      DB_USER: ${PAYMENT_DB_USER:-payment_user}
+      DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-payment_pass}
+      DB_NAME: ${PAYMENT_DB_NAME:-payment_db}
+    volumes:
+      - payment-pgdata-2:/var/lib/postgresql/data
+    depends_on:
+      etcd-1:
+        condition: service_healthy
+      etcd-2:
+        condition: service_healthy
+      etcd-3:
+        condition: service_healthy
+    restart: unless-stopped
+
+  payment-db-3:
+    build:
+      context: ./patroni
+    environment:
+      PATRONI_SCOPE: payment-cluster
+      PATRONI_NAME: payment-db-3
+      PATRONI_PRIORITY: 50
+      PATRONI_CONNECT_HOST: payment-db-3
+      POSTGRES_PASSWORD: ${PATRONI_SUPERUSER_PASSWORD:-postgres_pass}
+      REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+      DB_USER: ${PAYMENT_DB_USER:-payment_user}
+      DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-payment_pass}
+      DB_NAME: ${PAYMENT_DB_NAME:-payment_db}
+    volumes:
+      - payment-pgdata-3:/var/lib/postgresql/data
+    depends_on:
+      etcd-1:
+        condition: service_healthy
+      etcd-2:
+        condition: service_healthy
+      etcd-3:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 3 — NOTIFICATION SERVICE (silo standard)
+  # ═══════════════════════════════════════════════════════════
+
+  notification-service:
+    build:
+      context: ./services/notification-service/src
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}
+      DATABASE_REPLICA_URL: postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}_readonly
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+    depends_on:
+      notif-pgbouncer:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  notification-service-replica:
+    build:
+      context: ./services/notification-service/src
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}
+      DATABASE_REPLICA_URL: postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}_readonly
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+    depends_on:
+      notif-pgbouncer:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  notif-pgbouncer:
+    image: bitnamilegacy/pgbouncer:latest
+    environment:
+      POSTGRESQL_HOST: notif-db
+      POSTGRESQL_USERNAME: notif_user
+      POSTGRESQL_PASSWORD: notif_pass
+      POSTGRESQL_DATABASE: notif_db
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_MAX_CLIENT_CONN: 200
+      PGBOUNCER_DEFAULT_POOL_SIZE: 20
+    volumes:
+      - ./infra/pgbouncer/notif/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+      - ./infra/pgbouncer/notif/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    depends_on:
+      notif-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  notif-db:
+    image: bitnamilegacy/postgresql:16-debian-12
+    environment:
+      POSTGRESQL_USERNAME: ${NOTIF_DB_USER:-notif_user}
+      POSTGRESQL_PASSWORD: ${NOTIF_DB_PASSWORD:-notif_pass}
+      POSTGRESQL_DATABASE: ${NOTIF_DB_NAME:-notif_db}
+      POSTGRESQL_REPLICATION_MODE: master
+      POSTGRESQL_REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIF_DB_USER:-notif_user}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - notif-pgdata:/bitnami/postgresql
+    restart: unless-stopped
+
+  notif-db-replica:
+    image: bitnamilegacy/postgresql:16-debian-12
+    environment:
+      POSTGRESQL_REPLICATION_MODE: slave
+      POSTGRESQL_MASTER_HOST: notif-db
+      POSTGRESQL_MASTER_PORT_NUMBER: 5432
+      POSTGRESQL_USERNAME: ${NOTIF_DB_USER:-notif_user}
+      POSTGRESQL_PASSWORD: ${NOTIF_DB_PASSWORD:-notif_pass}
+      POSTGRESQL_REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
+    depends_on:
+      notif-db:
+        condition: service_healthy
+    volumes:
+      - notif-pgreplica:/bitnami/postgresql
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 4 — ETCD CLUSTER (consensus pour Patroni)
+  # ═══════════════════════════════════════════════════════════
+
+  etcd-1:
+    image: bitnamilegacy/etcd:3.6.4-debian-12-r4
+    environment:
+      ALLOW_NONE_AUTHENTICATION: "yes"
+      ETCD_NAME: etcd-1
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd-1:2379
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd-1:2380
+      ETCD_INITIAL_CLUSTER: etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: etcd-ticket-cluster
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - etcd-1-data:/bitnami/etcd
+    restart: unless-stopped
+
+  etcd-2:
+    image: bitnamilegacy/etcd:3.6.4-debian-12-r4
+    environment:
+      ALLOW_NONE_AUTHENTICATION: "yes"
+      ETCD_NAME: etcd-2
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd-2:2379
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd-2:2380
+      ETCD_INITIAL_CLUSTER: etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: etcd-ticket-cluster
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - etcd-2-data:/bitnami/etcd
+    restart: unless-stopped
+
+  etcd-3:
+    image: bitnamilegacy/etcd:3.6.4-debian-12-r4
+    environment:
+      ALLOW_NONE_AUTHENTICATION: "yes"
+      ETCD_NAME: etcd-3
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd-3:2379
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd-3:2380
+      ETCD_INITIAL_CLUSTER: etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: etcd-ticket-cluster
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - etcd-3-data:/bitnami/etcd
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 5 — INFRASTRUCTURE PARTAGÉE
+  # ═══════════════════════════════════════════════════════════
+
+  rabbitmq:
+    image: rabbitmq:3.11-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 6 — OBSERVABILITÉ
+  # ═══════════════════════════════════════════════════════════
+
+  zipkin:
+    image: openzipkin/zipkin:3
+    ports:
+      - "9411:9411"
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════
+  # ZONE 7 — MAINTENANCE
+  # ═══════════════════════════════════════════════════════════
+
+  cron-backup:
+    build:
+      context: ./infra/cron-backup
+    depends_on:
+      payment-pgbouncer:
+        condition: service_started
+    restart: unless-stopped
+
+# =============================================================
+# VOLUMES
+# =============================================================
+
+volumes:
+  # Standard silos (Bitnami master/slave)
+  auth-pgdata:
+  auth-pgreplica:
+  user-pgdata:
+  user-pgreplica:
+  event-pgdata:
+  event-pgreplica:
+  notif-pgdata:
+  notif-pgreplica:
+  # Critical silos (Patroni 3 nœuds)
+  booking-pgdata-1:
+  booking-pgdata-2:
+  booking-pgdata-3:
+  payment-pgdata-1:
+  payment-pgdata-2:
+  payment-pgdata-3:
+  # ETCD
+  etcd-1-data:
+  etcd-2-data:
+  etcd-3-data:
+  # Infrastructure
+  rabbitmqdata:
+  redisdata:
