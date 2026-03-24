@@ -1,0 +1,192 @@
+version: "3.9"
+
+services:
+  user-service-1:
+    build: ./user-service
+    environment:
+      - PORT=3004
+
+  user-service-2:
+    build: ./user-service
+    environment:
+      - PORT=3004
+
+  user-lb:
+    build: ./user-lb
+    ports:
+      - "3010:3010"
+    depends_on:
+      - user-service-1
+      - user-service-2
+
+
+  account-service-1:
+    build: ./account-service
+    environment:
+      - PORT=3003
+      - DATABASE_URL=postgresql://bigbank:bigbank@db:5432/bigbank
+      - DATABASE_REPLICA_URL=postgresql://bigbank:bigbank@db-replica:5432/bigbank
+    depends_on:
+      db:
+        condition: service_healthy
+      db-replica:
+        condition: service_started
+
+  account-service-2:
+    build: ./account-service
+    environment:
+      - PORT=3003
+      - DATABASE_URL=postgresql://bigbank:bigbank@db:5432/bigbank
+      - DATABASE_REPLICA_URL=postgresql://bigbank:bigbank@db-replica:5432/bigbank
+    depends_on:
+      db:
+        condition: service_healthy
+      db-replica:
+        condition: service_started
+
+  account-lb:
+    build: ./account-lb
+    ports:
+      - "3020:3020"
+    depends_on:
+      - account-service-1
+      - account-service-2
+
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  transaction-service:
+    build: ./transaction-service
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - ACCOUNT_URL=http://account-lb:3020/accounts
+      - NOTIFICATION_URL=http://notification-service:3002/notify
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  bigbank-1:
+    build: ./bigbank
+    environment:
+      - PORT=3000
+      - USER_URL=http://user-lb:3010/users
+      - ACCOUNT_URL=http://account-lb:3020/accounts
+      - NOTIFICATION_URL=http://notification-service:3002/notify
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      user-lb:
+        condition: service_started
+      account-lb:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  bigbank-2:
+    build: ./bigbank
+    environment:
+      - PORT=3000
+      - USER_URL=http://user-lb:3010/users
+      - ACCOUNT_URL=http://account-lb:3020/accounts
+      - NOTIFICATION_URL=http://notification-service:3002/notify
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      user-lb:
+        condition: service_started
+      account-lb:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  bigbank-lb:
+    build: ./bigbank-lb
+    ports:
+      - "3030:3030"
+    depends_on:
+        - bigbank-1
+        - bigbank-2
+
+  bigbank-admin:
+    build: ./bigbank-admin
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - USER_URL=http://user-lb:3010/users
+      - ACCOUNT_URL=http://account-lb:3020/accounts
+      - TRANSACTION_URL=http://transaction-service:3005/transactions
+    depends_on:
+      - user-lb
+      - account-lb
+      - transaction-service
+
+  frontend:
+    build: ./frontend
+    ports:
+      - 8080:80
+    depends_on:
+      - bigbank-lb
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bigbank
+      POSTGRES_PASSWORD: bigbank
+      POSTGRES_DB: bigbank
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bigbank"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+
+  db-replica:
+    build: ./db-replica
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      PGPASSWORD: replicator
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgreplica:/var/lib/postgresql/data
+    depends_on:
+      - db
+
+  rabbitmq:
+    image: rabbitmq:3.11-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+
+volumes:
+  pgdata:
+  pgreplica:
+  rabbitmqdata:

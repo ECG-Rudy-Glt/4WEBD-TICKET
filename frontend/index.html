@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BigBank - Virement</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+    <header class="header">
+        <div class="logo">BigBank</div>
+        <nav>
+            <span class="nav-item active">Transact</span>
+        </nav>
+    </header>
+    <main class="main">
+        <section class="intro">
+            <h1>Virement entre comptes</h1>
+            <p>Choisissez le compte source, le compte destination et le montant.</p>
+        </section>
+        <section class="card transact-card">
+            <h2 class="card-title">Transact</h2>
+
+            <div class="form-group">
+                <label for="source">Compte source</label>
+                <select id="source" name="source" required></select>
+            </div>
+            <div class="form-group">
+                <label for="destination">Compte destination</label>
+                <select id="destination" required></select>
+            </div>
+            <div class="form-group">
+                <label for="amount">Montant (€)</label>
+                <input type="number" id="amount" min="0.01" step="0.01" placeholder="0" required />
+            </div>
+            <div class="form-group">
+                <label for="description">Description (optionnel)</label>
+                <input type="text" id="description" placeholder="Ex: Virement vers épargne" />
+            </div>
+
+            <button type="button" id="submitBtn" class="btn-primary">Prévisualiser le virement</button>
+            <div id="message" class="message" aria-live="polite"></div>
+        </section>
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>

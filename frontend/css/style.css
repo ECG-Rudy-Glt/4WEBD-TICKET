@@ -1,0 +1,140 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+    color: #e6edf3;
+    min-height: 100vh;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+    background: #161b22;
+    border-bottom:1px solid #21262d;
+}
+
+.logo {
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: #3fb950;
+}
+
+.nav-item {
+    color: #8b949e;
+}
+
+.nav-item.active {
+    color: #3fb950;
+}
+
+.main {
+    max-width: 480px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+.intro {
+    margin-bottom: 2rem;
+}
+
+.intro h1 {
+    color: #3fb950;
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.intro p {
+    color: #8b949e;
+    margin: 0;
+}
+
+.transact-card {
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.card-title {
+    margin: 0 0 1.25rem;
+    font-size: 1.125rem;
+    color: #e6edf3;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.875rem;
+    color: #8b949e;
+}
+
+.form-group select,
+.form-group input {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    font-size: 1rem;
+}
+
+.form-group select:focus,
+.form-group input:focus {
+    outline: none;
+    border-color: #3fb950;
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    margin-top: 0.5rem;
+    background: #3fb950;
+    color: #0d1117;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.message {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+}
+
+.message.success {
+    background: rgba(63, 185, 80, 0.15);
+    border: 1px solid #3fb950;
+    color: #3fb950;
+}
+
+
+
+
+
+
+
+
+
