@@ -1,40 +1,33 @@
 import { Router } from 'express';
-import { createProfileSchema, updateProfileSchema } from '../schemas/user.schema.js';
 import * as userService from '../services/user.service.js';
 
 const router = Router();
 
-// POST /users — créer un profil (appelé par la gateway après register)
+// POST /users — création (appelé par la gateway après register)
 router.post('/', async (req, res) => {
   try {
-    const data = createProfileSchema.parse(req.body);
-    const profile = await userService.createProfile(data);
-    res.status(201).json(profile);
+    const user = await userService.createUser(req.body);
+    res.status(201).json(user);
   } catch (err) {
-    if (err.errors) return res.status(400).json({ errors: err.errors });
     res.status(err.status || 500).json({ error: err.message });
   }
 });
 
-// GET /users — liste paginée
-router.get('/', async (req, res) => {
+// GET /users — liste (admin)
+router.get('/', async (_req, res) => {
   try {
-    const page  = parseInt(req.query.page)  || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const result = await userService.getAllProfiles({ page, limit });
-    res.json(result);
+    res.json(await userService.getAllUsers());
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// GET /users/me — profil de l'utilisateur courant via header X-User-Id
+// GET /users/me — profil courant via header X-User-Id
 router.get('/me', async (req, res) => {
   try {
     const authId = parseInt(req.headers['x-user-id']);
     if (!authId) return res.status(401).json({ error: 'Non authentifié' });
-    const profile = await userService.getProfileByAuthId(authId);
-    res.json(profile);
+    res.json(await userService.getUserByAuthId(authId));
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -43,31 +36,27 @@ router.get('/me', async (req, res) => {
 // GET /users/:id
 router.get('/:id', async (req, res) => {
   try {
-    const profile = await userService.getProfileById(parseInt(req.params.id));
-    res.json(profile);
+    res.json(await userService.getUserById(parseInt(req.params.id)));
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
 });
 
-// PUT /users/me — mise à jour du profil courant
+// PUT /users/me
 router.put('/me', async (req, res) => {
   try {
     const authId = parseInt(req.headers['x-user-id']);
     if (!authId) return res.status(401).json({ error: 'Non authentifié' });
-    const data = updateProfileSchema.parse(req.body);
-    const profile = await userService.updateProfile(authId, data);
-    res.json(profile);
+    res.json(await userService.updateUser(authId, req.body));
   } catch (err) {
-    if (err.errors) return res.status(400).json({ errors: err.errors });
     res.status(err.status || 500).json({ error: err.message });
   }
 });
 
-// DELETE /users/:authId — suppression (admin)
+// DELETE /users/:authId
 router.delete('/:authId', async (req, res) => {
   try {
-    await userService.deleteProfile(parseInt(req.params.authId));
+    await userService.deleteUser(parseInt(req.params.authId));
     res.status(204).send();
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

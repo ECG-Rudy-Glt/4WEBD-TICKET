@@ -1,135 +1,60 @@
 import amqp from 'amqplib';
+import axios from 'axios';
 import { createTicket } from './ticket.service.js';
 import { acquireLock, releaseLock } from '../redis.js';
 
-const RABBITMQ_URL   = process.env.RABBITMQ_URL   || 'amqp://guest:guest@rabbitmq:5672';
-const EVENT_URL      = process.env.EVENT_URL       || 'http://event-lb:3021';
-const PAYMENT_QUEUE  = 'payments';
-const BOOKING_QUEUE  = 'bookings';
-const NOTIF_QUEUE    = 'notifications';
+const RABBITMQ_URL  = process.env.RABBITMQ_URL  || 'amqp://guest:guest@rabbitmq:5672';
+const EVENT_SERVICE = process.env.EVENT_SERVICE_URL || 'http://event-service:3003';
 
-let channel = null;
+export async function startConsumer(channel) {
+  await channel.assertQueue('bookings', { durable: true });
+  await channel.assertQueue('payments', { durable: true });
+  await channel.assertQueue('notifications', { durable: true });
+  channel.prefetch(1);
 
-async function connectNotifAndPayment() {
-  const conn = await amqp.connect(RABBITMQ_URL);
-  channel = await conn.createChannel();
-  await channel.assertQueue(PAYMENT_QUEUE, { durable: true });
-  await channel.assertQueue(NOTIF_QUEUE,   { durable: true });
-}
+  console.log('[booking-service] En attente de messages sur "bookings"...');
 
-async function publishToQueue(queue, data) {
-  if (!channel) throw new Error('Channel RabbitMQ non initialisé');
-  channel.sendToQueue(queue, Buffer.from(JSON.stringify(data)), { persistent: true });
-}
+  channel.consume('bookings', async (msg) => {
+    if (!msg) return;
+    const data = JSON.parse(msg.content.toString());
+    const lockKey = `lock:event:${data.eventId}`;
+    let lockId;
 
-async function processBooking(msg, ch) {
-  const data = JSON.parse(msg.content.toString());
-  const { eventId, userId, userEmail, quantity, cardToken } = data;
+    try {
+      lockId = await acquireLock(lockKey, 10000);
+      if (!lockId) throw new Error('Impossible d\'acquérir le verrou');
 
-  console.log(`[booking-service] Traitement réservation — event:${eventId} user:${userId} qty:${quantity}`);
-
-  const lockKey = `event:lock:${eventId}`;
-  const lockId  = await acquireLock(lockKey, 5000);
-
-  if (!lockId) {
-    console.warn(`[booking-service] Lock non acquis pour event:${eventId} — requeue`);
-    return ch.nack(msg, false, true);
-  }
-
-  try {
-    // Vérification capacité sur le primary (fraîche)
-    const res = await fetch(`${EVENT_URL}/events/${eventId}`);
-    if (!res.ok) {
-      await publishToQueue(NOTIF_QUEUE, {
-        type: 'booking_failed', userId, userEmail,
-        reason: 'Événement introuvable ou indisponible',
+      // Décrémente les places (atomique, échoue si plus de places)
+      await axios.patch(`${EVENT_SERVICE}/events/${data.eventId}/capacity/decrement`, {
+        quantity: data.quantity || 1,
       });
-      return ch.ack(msg);
+
+      const ticket = await createTicket(data);
+
+      channel.sendToQueue('payments', Buffer.from(JSON.stringify({
+        ticketId:     ticket.id,
+        userId:       data.userId,
+        userEmail:    data.userEmail,
+        eventId:      data.eventId,
+        eventTitle:   data.eventTitle,
+        quantity:     data.quantity || 1,
+        priceInCents: ticket.priceInCents,
+        cardToken:    data.cardToken,
+      })), { persistent: true });
+
+      channel.ack(msg);
+    } catch (err) {
+      console.error('[booking-service] Erreur:', err.message);
+      channel.sendToQueue('notifications', Buffer.from(JSON.stringify({
+        type:      'booking_failed',
+        userId:    data.userId,
+        userEmail: data.userEmail,
+        eventTitle: data.eventTitle,
+        reason:    err.message,
+      })), { persistent: true });
+      channel.ack(msg);
+    } finally {
+      if (lockId) await releaseLock(lockKey, lockId);
     }
-
-    const event = await res.json();
-
-    if (event.status !== 'active') {
-      await publishToQueue(NOTIF_QUEUE, {
-        type: 'booking_failed', userId, userEmail,
-        eventTitle: event.title,
-        reason: event.status === 'sold_out' ? 'Événement complet' : 'Événement annulé',
-      });
-      return ch.ack(msg);
-    }
-
-    if (event.availableTickets < quantity) {
-      await publishToQueue(NOTIF_QUEUE, {
-        type: 'booking_failed', userId, userEmail,
-        eventTitle: event.title,
-        reason: `Plus assez de places (disponibles: ${event.availableTickets})`,
-      });
-      return ch.ack(msg);
-    }
-
-    // Décrémenter la capacité (atomique en DB)
-    const decrRes = await fetch(`${EVENT_URL}/events/${eventId}/capacity/decrement`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quantity }),
-    });
-
-    if (!decrRes.ok) {
-      await publishToQueue(NOTIF_QUEUE, {
-        type: 'booking_failed', userId, userEmail,
-        eventTitle: event.title,
-        reason: 'Plus de places disponibles',
-      });
-      return ch.ack(msg);
-    }
-
-    // Créer le ticket en DB
-    const ticket = await createTicket({
-      eventId, userId,
-      priceInCents: event.priceInCents * quantity,
-      quantity,
-    });
-
-    console.log(`[booking-service] Ticket créé — id:${ticket.id} code:${ticket.ticketCode}`);
-
-    // Publier vers la queue payments
-    await publishToQueue(PAYMENT_QUEUE, {
-      ticketId:     ticket.id,
-      ticketCode:   ticket.ticketCode,
-      eventId,
-      eventTitle:   event.title,
-      userId,
-      userEmail,
-      amountInCents: event.priceInCents * quantity,
-      quantity,
-      cardToken,
-    });
-
-    ch.ack(msg);
-  } catch (err) {
-    console.error('[booking-service] Erreur traitement réservation:', err.message);
-    ch.nack(msg, false, true);
-  } finally {
-    await releaseLock(lockKey, lockId);
-  }
-}
-
-export async function startConsumer() {
-  try {
-    await connectNotifAndPayment();
-
-    const conn = await amqp.connect(RABBITMQ_URL);
-    const ch   = await conn.createChannel();
-    await ch.assertQueue(BOOKING_QUEUE, { durable: true });
-    ch.prefetch(1); // 1 message à la fois par instance
-
-    console.log(`[booking-service] En attente de messages sur "${BOOKING_QUEUE}"...`);
-
-    ch.consume(BOOKING_QUEUE, (msg) => {
-      if (msg) processBooking(msg, ch);
-    });
-  } catch (err) {
-    console.error('[booking-service] Erreur connexion RabbitMQ:', err.message);
-    setTimeout(startConsumer, 5000);
-  }
+  });
 }

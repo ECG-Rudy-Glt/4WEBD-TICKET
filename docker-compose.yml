@@ -29,7 +29,7 @@ services:
 
   api-gateway-1:
     build:
-      context: ./gateway
+      context: ./services/gateway
     environment:
       PORT: 3000
       JWT_SECRET: ${JWT_SECRET}
@@ -55,7 +55,7 @@ services:
 
   api-gateway-2:
     build:
-      context: ./gateway
+      context: ./services/gateway
     environment:
       PORT: 3000
       JWT_SECRET: ${JWT_SECRET}
@@ -567,7 +567,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./services/frontend
     ports:
       - "8080:80"
     depends_on:

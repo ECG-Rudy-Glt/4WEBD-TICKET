@@ -1,120 +1,54 @@
-import amqp from 'amqplib';
+import axios from 'axios';
 import { processPayment } from './payment.service.js';
 
-const RABBITMQ_URL  = process.env.RABBITMQ_URL  || 'amqp://guest:guest@rabbitmq:5672';
-const BOOKING_URL   = process.env.BOOKING_URL   || 'http://booking-lb:3020';
-const EVENT_URL     = process.env.EVENT_URL     || 'http://event-lb:3021';
-const PAYMENT_QUEUE = 'payments';
-const NOTIF_QUEUE   = 'notifications';
+const BOOKING_SERVICE = process.env.BOOKING_SERVICE_URL || 'http://booking-service:3004';
+const EVENT_SERVICE   = process.env.EVENT_SERVICE_URL   || 'http://event-service:3003';
 
-let notifChannel = null;
+export async function startConsumer(channel) {
+  await channel.assertQueue('payments', { durable: true });
+  await channel.assertQueue('notifications', { durable: true });
+  channel.prefetch(1);
 
-async function connectNotifQueue() {
-  try {
-    const conn = await amqp.connect(RABBITMQ_URL);
-    notifChannel = await conn.createChannel();
-    await notifChannel.assertQueue(NOTIF_QUEUE, { durable: true });
-    console.log('[payment-service] Queue notifications prête');
-  } catch (err) {
-    console.error('[payment-service] Erreur connexion queue notifications:', err.message);
-    setTimeout(connectNotifQueue, 5000);
-  }
-}
+  console.log('[payment-service] En attente de messages sur "payments"...');
 
-async function publishNotif(data) {
-  if (!notifChannel) {
-    console.error('[payment-service] Queue notifications non disponible');
-    return;
-  }
-  notifChannel.sendToQueue(NOTIF_QUEUE, Buffer.from(JSON.stringify(data)), { persistent: true });
-}
+  channel.consume('payments', async (msg) => {
+    if (!msg) return;
+    const data = JSON.parse(msg.content.toString());
 
-async function handlePayment(msg, ch) {
-  const data = JSON.parse(msg.content.toString());
-  const { ticketId, ticketCode, eventId, eventTitle, userId, userEmail, amountInCents, quantity, cardToken } = data;
+    try {
+      const payment = await processPayment(data);
 
-  console.log(`[payment-service] Traitement paiement — ticket:${ticketId} montant:${amountInCents}cts`);
+      if (payment.status === 'success') {
+        await axios.patch(`${BOOKING_SERVICE}/tickets/${data.ticketId}/status`, {
+          status: 'confirmed', paymentId: payment.id,
+        });
+        channel.sendToQueue('notifications', Buffer.from(JSON.stringify({
+          type:           'payment_success',
+          userId:         data.userId,
+          userEmail:      data.userEmail,
+          eventTitle:     data.eventTitle,
+          quantity:       data.quantity,
+          amountInCents:  payment.amountInCents,
+          transactionRef: payment.transactionRef,
+          ticketCode:     data.ticketCode,
+        })), { persistent: true });
+      } else {
+        await axios.patch(`${BOOKING_SERVICE}/tickets/${data.ticketId}/status`, { status: 'cancelled' });
+        await axios.patch(`${EVENT_SERVICE}/events/${data.eventId}/capacity/restore`, { quantity: data.quantity });
+        channel.sendToQueue('notifications', Buffer.from(JSON.stringify({
+          type:          'payment_failed',
+          userId:        data.userId,
+          userEmail:     data.userEmail,
+          eventTitle:    data.eventTitle,
+          amountInCents: payment.amountInCents,
+          reason:        'Paiement refusé par la banque',
+        })), { persistent: true });
+      }
 
-  try {
-    const { payment, success } = await processPayment({
-      ticketId, userId, eventId, amountInCents, cardToken,
-    });
-
-    if (success) {
-      // Confirmer le ticket
-      await fetch(`${BOOKING_URL}/tickets/${ticketId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'confirmed', paymentId: payment.id }),
-      });
-
-      await publishNotif({
-        type:          'payment_success',
-        userId,
-        userEmail,
-        ticketId,
-        ticketCode,
-        eventId,
-        eventTitle,
-        amountInCents,
-        quantity,
-        transactionRef: payment.transactionRef,
-        cardLast4:      payment.cardLast4,
-      });
-
-      console.log(`[payment-service] Paiement OK — ref:${payment.transactionRef}`);
-    } else {
-      // Annuler le ticket
-      await fetch(`${BOOKING_URL}/tickets/${ticketId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'cancelled' }),
-      });
-
-      // Restaurer la capacité de l'événement
-      await fetch(`${EVENT_URL}/events/${eventId}/capacity/restore`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity }),
-      });
-
-      await publishNotif({
-        type:       'payment_failed',
-        userId,
-        userEmail,
-        ticketId,
-        eventId,
-        eventTitle,
-        amountInCents,
-        reason:     'Paiement refusé par la banque',
-      });
-
-      console.log(`[payment-service] Paiement ÉCHOUÉ — ticket:${ticketId} annulé, capacité restaurée`);
+      channel.ack(msg);
+    } catch (err) {
+      console.error('[payment-service] Erreur:', err.message);
+      channel.ack(msg);
     }
-
-    ch.ack(msg);
-  } catch (err) {
-    console.error('[payment-service] Erreur traitement paiement:', err.message);
-    ch.nack(msg, false, true);
-  }
-}
-
-export async function startConsumer() {
-  try {
-    await connectNotifQueue();
-
-    const conn = await amqp.connect(RABBITMQ_URL);
-    const ch   = await conn.createChannel();
-    await ch.assertQueue(PAYMENT_QUEUE, { durable: true });
-    ch.prefetch(1);
-
-    console.log(`[payment-service] En attente de messages sur "${PAYMENT_QUEUE}"...`);
-
-    ch.consume(PAYMENT_QUEUE, (msg) => {
-      if (msg) handlePayment(msg, ch);
-    });
-  } catch (err) {
-    console.error('[payment-service] Erreur connexion RabbitMQ:', err.message);
-    setTimeout(startConsumer, 5000);
-  }
+  });
 }

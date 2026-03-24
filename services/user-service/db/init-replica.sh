@@ -1,11 +1,11 @@
 #!/bin/sh
 set -e
 
-cat >> "$PGDATA/postgresql.conf" <<EOF
+cat >> "$PGDATA/postgresql.conf" <<PGEOF
 wal_level = replica
 max_wal_senders = 3
 hot_standby = on
-EOF
+PGEOF
 
 echo "host replication replicator 0.0.0.0/0 md5" >> "$PGDATA/pg_hba.conf"
 

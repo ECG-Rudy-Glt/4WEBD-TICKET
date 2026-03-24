@@ -3,29 +3,19 @@ import * as notifService from '../services/notification.service.js';
 
 const router = Router();
 
-// GET /notifications — toutes les notifications (admin)
-router.get('/', async (req, res) => {
+router.get('/', async (_req, res) => {
   try {
-    const page  = parseInt(req.query.page)  || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const result = await notifService.getAllNotifications({ page, limit });
-    res.json(result);
+    res.json(await notifService.getAllNotifications());
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// GET /notifications/user/:userId — notifications d'un utilisateur
 router.get('/user/:userId', async (req, res) => {
   try {
-    const page  = parseInt(req.query.page)  || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const result = await notifService.getNotificationsByUser(
-      parseInt(req.params.userId), { page, limit }
-    );
-    res.json(result);
+    res.json(await notifService.getNotificationsByUser(parseInt(req.params.userId)));
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 

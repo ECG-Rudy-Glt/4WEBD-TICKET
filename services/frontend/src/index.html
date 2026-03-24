@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>TicketApp</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav>
+  <strong>TicketApp</strong>
+  <div>
+    <a onclick="showPage('events')">Événements</a>
+    <a onclick="showPage('my-tickets')">Mes billets</a>
+    <span id="nav-auth">
+      <a onclick="showPage('login')">Connexion</a>
+      <a onclick="showPage('register')">Inscription</a>
+    </span>
+    <span id="nav-user" style="display:none">
+      <a onclick="logout()">Déconnexion</a>
+    </span>
+  </div>
+</nav>
+
+<main>
+
+  <!-- Events -->
+  <div id="page-events" class="page active">
+    <h2>Événements</h2>
+    <div id="events-list">Chargement...</div>
+  </div>
+
+  <!-- Buy modal inline -->
+  <div id="page-buy" class="page">
+    <a onclick="showPage('events')" style="cursor:pointer;font-size:13px;">&larr; Retour</a>
+    <br><br>
+    <div id="buy-event-info" class="card"></div>
+    <h2>Acheter un billet</h2>
+    <div id="buy-msg"></div>
+    <label>Quantité</label>
+    <input type="number" id="buy-qty" value="1" min="1">
+    <label>Numéro de carte (simulé)</label>
+    <input type="text" id="buy-card" placeholder="1234567890123456" maxlength="16">
+    <button onclick="buyTicket()">Confirmer l'achat</button>
+  </div>
+
+  <!-- My tickets -->
+  <div id="page-my-tickets" class="page">
+    <h2>Mes billets</h2>
+    <div id="tickets-list">Connectez-vous pour voir vos billets.</div>
+  </div>
+
+  <!-- Login -->
+  <div id="page-login" class="page">
+    <h2>Connexion</h2>
+    <div id="login-msg"></div>
+    <label>Email</label>
+    <input type="email" id="login-email" placeholder="email@exemple.com">
+    <label>Mot de passe</label>
+    <input type="password" id="login-pwd">
+    <button onclick="login()">Se connecter</button>
+  </div>
+
+  <!-- Register -->
+  <div id="page-register" class="page">
+    <h2>Inscription</h2>
+    <div id="register-msg"></div>
+    <label>Prénom</label>
+    <input type="text" id="reg-firstname">
+    <label>Nom</label>
+    <input type="text" id="reg-lastname">
+    <label>Email</label>
+    <input type="email" id="reg-email">
+    <label>Mot de passe</label>
+    <input type="password" id="reg-pwd">
+    <button onclick="register()">S'inscrire</button>
+  </div>
+
+</main>
+
+<script>
+  const API = '/api';
+  let token = localStorage.getItem('token');
+  let currentEventId = null;
+
+  function showPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    if (name === 'events') loadEvents();
+    if (name === 'my-tickets') loadMyTickets();
+  }
+
+  function msg(id, text, ok) {
+    const el = document.getElementById(id);
+    el.innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${text}</div>`;
+  }
+
+  function updateNav() {
+    const loggedIn = !!token;
+    document.getElementById('nav-auth').style.display = loggedIn ? 'none' : '';
+    document.getElementById('nav-user').style.display = loggedIn ? '' : 'none';
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch(API + path, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+    });
+    const data = await res.json();
+    if (!res.ok) throw data;
+    return data;
+  }
+
+  async function loadEvents() {
+    try {
+      const events = await api('/events');
+      const list = document.getElementById('events-list');
+      if (!events.length) { list.innerHTML = '<p>Aucun événement disponible.</p>'; return; }
+      list.innerHTML = events.map(e => `
+        <div class="card">
+          <h3>${e.title}</h3>
+          <p>${new Date(e.date).toLocaleString('fr-FR')} — ${e.venue}</p>
+          <p>${e.availableTickets} place(s) disponible(s) · ${(e.priceInCents / 100).toFixed(2)} €</p>
+          <br>
+          <button onclick="openBuy(${e.id})">Acheter</button>
+        </div>
+      `).join('');
+    } catch (e) {
+      document.getElementById('events-list').innerHTML = '<p>Erreur de chargement.</p>';
+    }
+  }
+
+  async function openBuy(eventId) {
+    if (!token) { showPage('login'); return; }
+    currentEventId = eventId;
+    try {
+      const e = await api(`/events/${eventId}`);
+      document.getElementById('buy-event-info').innerHTML = `
+        <h3>${e.title}</h3>
+        <p>${new Date(e.date).toLocaleString('fr-FR')} — ${e.venue}</p>
+        <p>${(e.priceInCents / 100).toFixed(2)} € / billet</p>
+      `;
+      document.getElementById('buy-msg').innerHTML = '';
+      showPage('buy');
+    } catch (e) {
+      alert('Impossible de charger l\'événement.');
+    }
+  }
+
+  async function buyTicket() {
+    const qty  = parseInt(document.getElementById('buy-qty').value);
+    const card = document.getElementById('buy-card').value.trim();
+    if (!card || card.length < 16) return msg('buy-msg', 'Numéro de carte invalide (16 chiffres).', false);
+    try {
+      await api('/bookings', {
+        method: 'POST',
+        body: JSON.stringify({ eventId: currentEventId, quantity: qty, cardToken: card }),
+      });
+      msg('buy-msg', 'Réservation envoyée ! Vous recevrez une confirmation.', true);
+    } catch (e) {
+      msg('buy-msg', e.error || 'Erreur lors de la réservation.', false);
+    }
+  }
+
+  async function loadMyTickets() {
+    if (!token) { document.getElementById('tickets-list').innerHTML = 'Connectez-vous pour voir vos billets.'; return; }
+    try {
+      const userId = JSON.parse(atob(token.split('.')[1])).id;
+      const tickets = await api(`/tickets/user/${userId}`);
+      const list = document.getElementById('tickets-list');
+      if (!tickets.length) { list.innerHTML = '<p>Aucun billet.</p>'; return; }
+      list.innerHTML = tickets.map(t => `
+        <div class="card">
+          <h3>Billet #${t.id}</h3>
+          <p>Code : <strong>${t.ticketCode}</strong></p>
+          <p>Statut : ${t.status} · ${t.quantity} place(s) · ${(t.priceInCents / 100).toFixed(2)} €</p>
+          <p>${new Date(t.createdAt).toLocaleString('fr-FR')}</p>
+        </div>
+      `).join('');
+    } catch (e) {
+      document.getElementById('tickets-list').innerHTML = '<p>Erreur de chargement.</p>';
+    }
+  }
+
+  async function login() {
+    try {
+      const res = await api('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          email:    document.getElementById('login-email').value,
+          password: document.getElementById('login-pwd').value,
+        }),
+      });
+      token = res.token;
+      localStorage.setItem('token', token);
+      updateNav();
+      showPage('events');
+    } catch (e) {
+      msg('login-msg', e.error || 'Identifiants invalides.', false);
+    }
+  }
+
+  async function register() {
+    try {
+      const res = await api('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          firstname: document.getElementById('reg-firstname').value,
+          lastname:  document.getElementById('reg-lastname').value,
+          email:     document.getElementById('reg-email').value,
+          password:  document.getElementById('reg-pwd').value,
+        }),
+      });
+      token = res.token;
+      localStorage.setItem('token', token);
+      updateNav();
+      showPage('events');
+    } catch (e) {
+      msg('register-msg', e.error || 'Erreur lors de l\'inscription.', false);
+    }
+  }
+
+  function logout() {
+    token = null;
+    localStorage.removeItem('token');
+    updateNav();
+    showPage('events');
+  }
+
+  updateNav();
+  loadEvents();
+</script>
+</body>
+</html>
