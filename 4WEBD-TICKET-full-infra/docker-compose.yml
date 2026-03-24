@@ -27,22 +27,10 @@ services:
     build:
       context: ./infra/nginx-frontal
     ports:
-      - "80:80"
+    - "80:80"
     depends_on:
-      - api-gateway
-      - api-gateway-replica
-      - frontend
-      - frontend-replica
-    restart: unless-stopped
-
-  nginx-replica:
-    build:
-      context: ./infra/nginx-frontal
-    depends_on:
-      - api-gateway
-      - api-gateway-replica
-      - frontend
-      - frontend-replica
+    - frontend
+    - gateway-lb
     restart: unless-stopped
 
   frontend:
@@ -50,38 +38,34 @@ services:
       context: ./services/frontend/frontend-app
     restart: unless-stopped
 
-  frontend-replica:
-    build:
-      context: ./services/frontend/frontend-app
-    restart: unless-stopped
-
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 2 — API GATEWAY (x2)
-  # ═══════════════════════════════════════════════════════════
-
   api-gateway:
     build:
       context: ./services/gateway/api-gateway
     environment:
       PORT: 3000
       JWT_SECRET: ${JWT_SECRET}
-      AUTH_URL: http://auth-service:3004
-      USER_URL: http://user-service:3001
-      EVENT_URL: http://event-service:3006
-      BOOKING_URL: http://booking-service:3003
-      PAYMENT_URL: http://payment-service:3005
-      NOTIFICATION_URL: http://notification-service:3002
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      AUTH_URL: http://auth-lb:3011/auth
+      USER_URL: http://user-lb:3010/users
+      EVENT_URL: http://event-lb:3020/events
+      BOOKING_URL: http://booking-lb:3021/tickets
+      PAYMENT_URL: http://payment-lb:3022/payments
+      NOTIFICATION_URL: http://notification-service:3002/notifications
+      RABBITMQ_URL: 
+        amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
     depends_on:
       rabbitmq:
         condition: service_healthy
-      auth-service:
+      auth-lb:
         condition: service_started
-      user-service:
+      user-lb:
         condition: service_started
-      event-service:
+      event-lb:
         condition: service_started
-      booking-service:
+      booking-lb:
+        condition: service_started
+      payment-lb:
+        condition: service_started
+      notification-service:
         condition: service_started
     restart: unless-stopped
 
@@ -91,23 +75,28 @@ services:
     environment:
       PORT: 3000
       JWT_SECRET: ${JWT_SECRET}
-      AUTH_URL: http://auth-service-replica:3004
-      USER_URL: http://user-service-replica:3001
-      EVENT_URL: http://event-service-replica:3006
-      BOOKING_URL: http://booking-service-replica:3003
-      PAYMENT_URL: http://payment-service-replica:3005
-      NOTIFICATION_URL: http://notification-service-replica:3002
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      AUTH_URL: http://auth-lb:3011/auth
+      USER_URL: http://user-lb:3010/users
+      EVENT_URL: http://event-lb:3020/events
+      BOOKING_URL: http://booking-lb:3021/tickets
+      PAYMENT_URL: http://payment-lb:3022/payments
+      NOTIFICATION_URL: http://notification-service:3002/notifications
+      RABBITMQ_URL: 
+        amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
     depends_on:
       rabbitmq:
         condition: service_healthy
-      auth-service-replica:
+      auth-lb:
         condition: service_started
-      user-service-replica:
+      user-lb:
         condition: service_started
-      event-service-replica:
+      event-lb:
         condition: service_started
-      booking-service-replica:
+      booking-lb:
+        condition: service_started
+      payment-lb:
+        condition: service_started
+      notification-service:
         condition: service_started
     restart: unless-stopped
 
@@ -117,27 +106,37 @@ services:
 
   auth-service:
     build:
-      context: ./services/auth-service/src
+      context: ./services/auth/auth-service
     environment:
-      PORT: 3004
-      DATABASE_URL: postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}
-      DATABASE_REPLICA_URL: postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}_readonly
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}_readonly
       JWT_SECRET: ${JWT_SECRET}
+      USER_URL: http://user-lb:3010/users
     depends_on:
       auth-pgbouncer:
+        condition: service_started
+      user-lb:
         condition: service_started
     restart: unless-stopped
 
   auth-service-replica:
     build:
-      context: ./services/auth-service/src
+      context: ./services/auth/auth-service
     environment:
-      PORT: 3004
-      DATABASE_URL: postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}
-      DATABASE_REPLICA_URL: postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}_readonly
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}_readonly
       JWT_SECRET: ${JWT_SECRET}
+      USER_URL: http://user-lb:3010/users
     depends_on:
       auth-pgbouncer:
+        condition: service_started
+      user-lb:
         condition: service_started
     restart: unless-stopped
 
@@ -152,8 +151,8 @@ services:
       PGBOUNCER_MAX_CLIENT_CONN: 200
       PGBOUNCER_DEFAULT_POOL_SIZE: 20
     volumes:
-      - ./infra/pgbouncer/auth/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
-      - ./infra/pgbouncer/auth/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    - ./infra/pgbouncer/auth/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+    - ./infra/pgbouncer/auth/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
     depends_on:
       auth-db:
         condition: service_healthy
@@ -174,7 +173,7 @@ services:
       timeout: 5s
       retries: 10
     volumes:
-      - auth-pgdata:/bitnami/postgresql
+    - auth-pgdata:/bitnami/postgresql
     restart: unless-stopped
 
   auth-db-replica:
@@ -191,7 +190,7 @@ services:
       auth-db:
         condition: service_healthy
     volumes:
-      - auth-pgreplica:/bitnami/postgresql
+    - auth-pgreplica:/bitnami/postgresql
     restart: unless-stopped
 
   # ═══════════════════════════════════════════════════════════
@@ -200,11 +199,13 @@ services:
 
   user-service:
     build:
-      context: ./services/user-service/src
+      context: ./services/user/user-service
     environment:
-      PORT: 3001
-      DATABASE_URL: postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}
-      DATABASE_REPLICA_URL: postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}_readonly
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}_readonly
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       user-pgbouncer:
@@ -213,11 +214,13 @@ services:
 
   user-service-replica:
     build:
-      context: ./services/user-service/src
+      context: ./services/user/user-service
     environment:
-      PORT: 3001
-      DATABASE_URL: postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}
-      DATABASE_REPLICA_URL: postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}_readonly
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${USER_DB_USER:-user_user}:${USER_DB_PASSWORD:-user_pass}@user-pgbouncer:6432/${USER_DB_NAME:-user_db}_readonly
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       user-pgbouncer:
@@ -235,8 +238,8 @@ services:
       PGBOUNCER_MAX_CLIENT_CONN: 200
       PGBOUNCER_DEFAULT_POOL_SIZE: 20
     volumes:
-      - ./infra/pgbouncer/user/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
-      - ./infra/pgbouncer/user/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    - ./infra/pgbouncer/user/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+    - ./infra/pgbouncer/user/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
     depends_on:
       user-db:
         condition: service_healthy
@@ -257,7 +260,7 @@ services:
       timeout: 5s
       retries: 10
     volumes:
-      - user-pgdata:/bitnami/postgresql
+    - user-pgdata:/bitnami/postgresql
     restart: unless-stopped
 
   user-db-replica:
@@ -274,7 +277,7 @@ services:
       user-db:
         condition: service_healthy
     volumes:
-      - user-pgreplica:/bitnami/postgresql
+    - user-pgreplica:/bitnami/postgresql
     restart: unless-stopped
 
   # ═══════════════════════════════════════════════════════════
@@ -283,11 +286,13 @@ services:
 
   event-service:
     build:
-      context: ./services/event-service/src
+      context: ./services/event/event-service
     environment:
-      PORT: 3006
-      DATABASE_URL: postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}
-      DATABASE_REPLICA_URL: postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}_readonly
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}_readonly
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       event-pgbouncer:
@@ -296,11 +301,13 @@ services:
 
   event-service-replica:
     build:
-      context: ./services/event-service/src
+      context: ./services/event/event-service
     environment:
-      PORT: 3006
-      DATABASE_URL: postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}
-      DATABASE_REPLICA_URL: postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}_readonly
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${EVENT_DB_USER:-event_user}:${EVENT_DB_PASSWORD:-event_pass}@event-pgbouncer:6432/${EVENT_DB_NAME:-event_db}_readonly
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       event-pgbouncer:
@@ -318,8 +325,8 @@ services:
       PGBOUNCER_MAX_CLIENT_CONN: 200
       PGBOUNCER_DEFAULT_POOL_SIZE: 20
     volumes:
-      - ./infra/pgbouncer/event/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
-      - ./infra/pgbouncer/event/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    - ./infra/pgbouncer/event/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+    - ./infra/pgbouncer/event/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
     depends_on:
       event-db:
         condition: service_healthy
@@ -340,7 +347,7 @@ services:
       timeout: 5s
       retries: 10
     volumes:
-      - event-pgdata:/bitnami/postgresql
+    - event-pgdata:/bitnami/postgresql
     restart: unless-stopped
 
   event-db-replica:
@@ -357,7 +364,7 @@ services:
       event-db:
         condition: service_healthy
     volumes:
-      - event-pgreplica:/bitnami/postgresql
+    - event-pgreplica:/bitnami/postgresql
     restart: unless-stopped
 
   # ═══════════════════════════════════════════════════════════
@@ -366,14 +373,17 @@ services:
 
   booking-service:
     build:
-      context: ./services/booking-service/src
+      context: ./services/booking/booking-service
     environment:
-      PORT: 3003
-      DATABASE_URL: postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}
-      DATABASE_REPLICA_URL: postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}_readonly
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}_readonly
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
-      EVENT_URL: http://event-service:3006
+      RABBITMQ_URL: 
+        amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      EVENT_URL: http://event-lb:3020/events
     depends_on:
       booking-pgbouncer:
         condition: service_started
@@ -385,14 +395,17 @@ services:
 
   booking-service-replica:
     build:
-      context: ./services/booking-service/src
+      context: ./services/booking/booking-service
     environment:
-      PORT: 3003
-      DATABASE_URL: postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}
-      DATABASE_REPLICA_URL: postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}_readonly
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${BOOKING_DB_USER:-booking_user}:${BOOKING_DB_PASSWORD:-booking_pass}@booking-pgbouncer:6432/${BOOKING_DB_NAME:-booking_db}_readonly
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
-      EVENT_URL: http://event-service-replica:3006
+      RABBITMQ_URL: 
+        amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      EVENT_URL: http://event-lb:3020/events
     depends_on:
       booking-pgbouncer:
         condition: service_started
@@ -413,8 +426,8 @@ services:
       PGBOUNCER_MAX_CLIENT_CONN: 200
       PGBOUNCER_DEFAULT_POOL_SIZE: 20
     volumes:
-      - ./infra/pgbouncer/booking/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
-      - ./infra/pgbouncer/booking/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    - ./infra/pgbouncer/booking/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+    - ./infra/pgbouncer/booking/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
     depends_on:
       booking-db-1:
         condition: service_started
@@ -436,7 +449,7 @@ services:
       DB_PASSWORD: ${BOOKING_DB_PASSWORD:-booking_pass}
       DB_NAME: ${BOOKING_DB_NAME:-booking_db}
     volumes:
-      - booking-pgdata-1:/var/lib/postgresql/data
+    - booking-pgdata-1:/var/lib/postgresql/data
     depends_on:
       etcd-1:
         condition: service_healthy
@@ -461,7 +474,7 @@ services:
       DB_PASSWORD: ${BOOKING_DB_PASSWORD:-booking_pass}
       DB_NAME: ${BOOKING_DB_NAME:-booking_db}
     volumes:
-      - booking-pgdata-2:/var/lib/postgresql/data
+    - booking-pgdata-2:/var/lib/postgresql/data
     depends_on:
       etcd-1:
         condition: service_healthy
@@ -486,7 +499,7 @@ services:
       DB_PASSWORD: ${BOOKING_DB_PASSWORD:-booking_pass}
       DB_NAME: ${BOOKING_DB_NAME:-booking_db}
     volumes:
-      - booking-pgdata-3:/var/lib/postgresql/data
+    - booking-pgdata-3:/var/lib/postgresql/data
     depends_on:
       etcd-1:
         condition: service_healthy
@@ -502,41 +515,47 @@ services:
 
   payment-service:
     build:
-      context: ./services/payment-service/src
+      context: ./services/payment/payment-service
     environment:
-      PORT: 3005
-      DATABASE_URL: postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}
-      DATABASE_REPLICA_URL: postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}_readonly
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
-      BOOKING_URL: http://booking-service:3003
-      EVENT_URL: http://event-service:3006
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}_readonly
+      RABBITMQ_URL: 
+        amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      BOOKING_URL: http://booking-lb:3021/tickets
+      EVENT_URL: http://event-lb:3020/events
       SIMULATE_FAILURE_RATE: ${SIMULATE_FAILURE_RATE:-0}
     depends_on:
       payment-pgbouncer:
         condition: service_started
       rabbitmq:
         condition: service_healthy
-      booking-service:
+      booking-lb:
         condition: service_started
     restart: unless-stopped
 
   payment-service-replica:
     build:
-      context: ./services/payment-service/src
+      context: ./services/payment/payment-service
     environment:
-      PORT: 3005
-      DATABASE_URL: postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}
-      DATABASE_REPLICA_URL: postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}_readonly
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
-      BOOKING_URL: http://booking-service-replica:3003
-      EVENT_URL: http://event-service-replica:3006
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${PAYMENT_DB_USER:-payment_user}:${PAYMENT_DB_PASSWORD:-payment_pass}@payment-pgbouncer:6432/${PAYMENT_DB_NAME:-payment_db}_readonly
+      RABBITMQ_URL: 
+        amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      BOOKING_URL: http://booking-lb:3021/tickets
+      EVENT_URL: http://event-lb:3020/events
       SIMULATE_FAILURE_RATE: ${SIMULATE_FAILURE_RATE:-0}
     depends_on:
       payment-pgbouncer:
         condition: service_started
       rabbitmq:
         condition: service_healthy
-      booking-service-replica:
+      booking-lb:
         condition: service_started
     restart: unless-stopped
 
@@ -551,8 +570,8 @@ services:
       PGBOUNCER_MAX_CLIENT_CONN: 200
       PGBOUNCER_DEFAULT_POOL_SIZE: 20
     volumes:
-      - ./infra/pgbouncer/payment/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
-      - ./infra/pgbouncer/payment/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    - ./infra/pgbouncer/payment/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+    - ./infra/pgbouncer/payment/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
     depends_on:
       payment-db-1:
         condition: service_started
@@ -574,7 +593,7 @@ services:
       DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-payment_pass}
       DB_NAME: ${PAYMENT_DB_NAME:-payment_db}
     volumes:
-      - payment-pgdata-1:/var/lib/postgresql/data
+    - payment-pgdata-1:/var/lib/postgresql/data
     depends_on:
       etcd-1:
         condition: service_healthy
@@ -599,7 +618,7 @@ services:
       DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-payment_pass}
       DB_NAME: ${PAYMENT_DB_NAME:-payment_db}
     volumes:
-      - payment-pgdata-2:/var/lib/postgresql/data
+    - payment-pgdata-2:/var/lib/postgresql/data
     depends_on:
       etcd-1:
         condition: service_healthy
@@ -624,7 +643,7 @@ services:
       DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-payment_pass}
       DB_NAME: ${PAYMENT_DB_NAME:-payment_db}
     volumes:
-      - payment-pgdata-3:/var/lib/postgresql/data
+    - payment-pgdata-3:/var/lib/postgresql/data
     depends_on:
       etcd-1:
         condition: service_healthy
@@ -640,12 +659,15 @@ services:
 
   notification-service:
     build:
-      context: ./services/notification-service/src
+      context: ./services/notification/notification-service
     environment:
-      PORT: 3002
-      DATABASE_URL: postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}
-      DATABASE_REPLICA_URL: postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}_readonly
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}_readonly
+      RABBITMQ_URL: 
+        amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
     depends_on:
       notif-pgbouncer:
         condition: service_started
@@ -655,12 +677,15 @@ services:
 
   notification-service-replica:
     build:
-      context: ./services/notification-service/src
+      context: ./services/notification/notification-service
     environment:
-      PORT: 3002
-      DATABASE_URL: postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}
-      DATABASE_REPLICA_URL: postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}_readonly
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
+      PORT: 3000
+      DATABASE_URL: 
+        postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}
+      DATABASE_REPLICA_URL: 
+        postgresql://${NOTIF_DB_USER:-notif_user}:${NOTIF_DB_PASSWORD:-notif_pass}@notif-pgbouncer:6432/${NOTIF_DB_NAME:-notif_db}_readonly
+      RABBITMQ_URL: 
+        amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672
     depends_on:
       notif-pgbouncer:
         condition: service_started
@@ -679,8 +704,8 @@ services:
       PGBOUNCER_MAX_CLIENT_CONN: 200
       PGBOUNCER_DEFAULT_POOL_SIZE: 20
     volumes:
-      - ./infra/pgbouncer/notif/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
-      - ./infra/pgbouncer/notif/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
+    - ./infra/pgbouncer/notif/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
+    - ./infra/pgbouncer/notif/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
     depends_on:
       notif-db:
         condition: service_healthy
@@ -701,7 +726,7 @@ services:
       timeout: 5s
       retries: 10
     volumes:
-      - notif-pgdata:/bitnami/postgresql
+    - notif-pgdata:/bitnami/postgresql
     restart: unless-stopped
 
   notif-db-replica:
@@ -718,7 +743,7 @@ services:
       notif-db:
         condition: service_healthy
     volumes:
-      - notif-pgreplica:/bitnami/postgresql
+    - notif-pgreplica:/bitnami/postgresql
     restart: unless-stopped
 
   # ═══════════════════════════════════════════════════════════
@@ -734,7 +759,8 @@ services:
       ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
       ETCD_ADVERTISE_CLIENT_URLS: http://etcd-1:2379
       ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd-1:2380
-      ETCD_INITIAL_CLUSTER: etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
+      ETCD_INITIAL_CLUSTER: 
+        etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
       ETCD_INITIAL_CLUSTER_STATE: new
       ETCD_INITIAL_CLUSTER_TOKEN: etcd-ticket-cluster
     healthcheck:
@@ -743,7 +769,7 @@ services:
       timeout: 5s
       retries: 5
     volumes:
-      - etcd-1-data:/bitnami/etcd
+    - etcd-1-data:/bitnami/etcd
     restart: unless-stopped
 
   etcd-2:
@@ -755,7 +781,8 @@ services:
       ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
       ETCD_ADVERTISE_CLIENT_URLS: http://etcd-2:2379
       ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd-2:2380
-      ETCD_INITIAL_CLUSTER: etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
+      ETCD_INITIAL_CLUSTER: 
+        etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
       ETCD_INITIAL_CLUSTER_STATE: new
       ETCD_INITIAL_CLUSTER_TOKEN: etcd-ticket-cluster
     healthcheck:
@@ -764,7 +791,7 @@ services:
       timeout: 5s
       retries: 5
     volumes:
-      - etcd-2-data:/bitnami/etcd
+    - etcd-2-data:/bitnami/etcd
     restart: unless-stopped
 
   etcd-3:
@@ -776,7 +803,8 @@ services:
       ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
       ETCD_ADVERTISE_CLIENT_URLS: http://etcd-3:2379
       ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd-3:2380
-      ETCD_INITIAL_CLUSTER: etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
+      ETCD_INITIAL_CLUSTER: 
+        etcd-1=http://etcd-1:2380,etcd-2=http://etcd-2:2380,etcd-3=http://etcd-3:2380
       ETCD_INITIAL_CLUSTER_STATE: new
       ETCD_INITIAL_CLUSTER_TOKEN: etcd-ticket-cluster
     healthcheck:
@@ -785,7 +813,7 @@ services:
       timeout: 5s
       retries: 5
     volumes:
-      - etcd-3-data:/bitnami/etcd
+    - etcd-3-data:/bitnami/etcd
     restart: unless-stopped
 
   # ═══════════════════════════════════════════════════════════
@@ -795,24 +823,24 @@ services:
   rabbitmq:
     image: rabbitmq:3.11-management
     ports:
-      - "5672:5672"
-      - "15672:15672"
+    - "5672:5672"
+    - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     volumes:
-      - rabbitmqdata:/var/lib/rabbitmq
+    - rabbitmqdata:/var/lib/rabbitmq
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     volumes:
-      - redisdata:/data
+    - redisdata:/data
     restart: unless-stopped
 
   # ═══════════════════════════════════════════════════════════
@@ -822,7 +850,7 @@ services:
   zipkin:
     image: openzipkin/zipkin:3
     ports:
-      - "9411:9411"
+    - "9411:9411"
     restart: unless-stopped
 
   # ═══════════════════════════════════════════════════════════
@@ -841,6 +869,54 @@ services:
 # VOLUMES
 # =============================================================
 
+  auth-lb:
+    build: ./services/auth/lb
+    ports:
+    - 3011:3011
+    depends_on:
+    - auth-service
+    - auth-service-replica
+    restart: unless-stopped
+  user-lb:
+    build: ./services/user/lb
+    ports:
+    - 3010:3010
+    depends_on:
+    - user-service
+    - user-service-replica
+    restart: unless-stopped
+  event-lb:
+    build: ./services/event/lb
+    ports:
+    - 3020:3020
+    depends_on:
+    - event-service
+    - event-service-replica
+    restart: unless-stopped
+  booking-lb:
+    build: ./services/booking/lb
+    ports:
+    - 3021:3021
+    depends_on:
+    - booking-service
+    - booking-service-replica
+    restart: unless-stopped
+  payment-lb:
+    build: ./services/payment/lb
+    ports:
+    - 3022:3022
+    depends_on:
+    - payment-service
+    - payment-service-replica
+    restart: unless-stopped
+  gateway-lb:
+    build: ./services/gateway/lb
+    ports:
+    - 3030:3030
+    depends_on:
+    - api-gateway
+    - api-gateway-replica
+    restart: unless-stopped
 volumes:
   # Standard silos (Bitnami master/slave)
   auth-pgdata:

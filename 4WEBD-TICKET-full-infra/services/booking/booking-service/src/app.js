@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import ticketRoutes from './routes/tickets.js';
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json());
 
 const limiter = rateLimit({

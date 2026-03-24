@@ -1,5 +1,5 @@
 (function () {
-    const API = 'http://localhost:3030';
+    const API = '/api';
     let token = localStorage.getItem('token');
     let currentEventId = null;
     let currentPage = 'events';
