@@ -11,19 +11,23 @@ const replicaPool = new Pool({
 });
 
 export async function initDb() {
-    await primaryPool.query(`
-        CREATE TABLE IF NOT EXISTS tickets (
-            id             SERIAL PRIMARY KEY,
-            "eventId"      INTEGER NOT NULL,
-            "userId"       INTEGER NOT NULL,
-            "ticketCode"   VARCHAR(100) UNIQUE NOT NULL,
-            status         VARCHAR(20) NOT NULL DEFAULT 'pending',
-            "paymentId"    INTEGER,
-            "priceInCents" INTEGER NOT NULL,
-            quantity       INTEGER NOT NULL DEFAULT 1,
-            "createdAt"    TIMESTAMPTZ DEFAULT NOW()
-        )
-    `);
+    try {
+        await primaryPool.query(`
+            CREATE TABLE IF NOT EXISTS tickets (
+                id             SERIAL PRIMARY KEY,
+                "eventId"      INTEGER NOT NULL,
+                "userId"       INTEGER NOT NULL,
+                "ticketCode"   VARCHAR(100) UNIQUE NOT NULL,
+                status         VARCHAR(20) NOT NULL DEFAULT 'pending',
+                "paymentId"    INTEGER,
+                "priceInCents" INTEGER NOT NULL,
+                quantity       INTEGER NOT NULL DEFAULT 1,
+                "createdAt"    TIMESTAMPTZ DEFAULT NOW()
+            )
+        `);
+    } catch (e) {
+        if (e.code !== '23505') throw e;
+    }
     console.log('[booking-service] DB prête');
 }
 
