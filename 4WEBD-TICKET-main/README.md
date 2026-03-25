@@ -71,7 +71,26 @@ graph TD
 
 ## Installation et Lancement
 
-Depuis ce dossier :
+### Prérequis
+
+Depuis le dossier `4WEBD-TICKET-main` :
+
+```bash
+cd 4WEBD-TICKET-main
+
+# Copier le fichier d'environnement
+cp .env.example .env
+
+# Rendre les scripts de replica exécutables
+chmod +x services/booking/db/init-replica.sh \
+         services/notification/db/init-replica.sh \
+         services/payment/db/init-replica.sh \
+         services/user/db/init-replica.sh \
+         services/event/db/init-replica.sh
+```
+
+### Lancement
+
 ```bash
 docker-compose up -d --build
 ```
