@@ -69,6 +69,37 @@ graph TD
 - **Asynchronisme** : L'achat d'un billet déclenche un message dans RabbitMQ, permettant au système de notifier l'utilisateur sans bloquer le flux principal.
 - **Performance** : Utilisation de Redis pour optimiser la gestion des places disponibles et éviter la survente lors de fortes charges.
 
+## Justifications Techniques
+
+### Pourquoi Nginx ?
+Nous avons choisi **Nginx** comme Load Balancer interne pour sa stabilité et sa simplicité de configuration par rapport à des solutions comme HAProxy. Nginx permet une gestion native du Round Robin et s'intègre parfaitement dans un environnement conteneurisé.
+
+**Exemple de configuration (booking-lb) :**
+```nginx
+upstream booking_backend {
+    server booking-service-1:3000;
+    server booking-service-2:3000;
+}
+server {
+    listen 3021;
+    location / {
+        proxy_pass http://booking_backend;
+    }
+}
+```
+*Fonctionnement :* Lorsqu'une requête arrive sur le port 3021, Nginx la redirige alternativement vers l'une des deux instances du service de réservation, assurant ainsi une distribution équilibrée de la charge.
+
+### Pourquoi PostgreSQL ?
+**PostgreSQL** a été retenu pour sa robustesse et sa fiabilité dans la gestion de données transactionnelles critiques. Sa capacité à gérer des réplications complexes (WAL) garantit la persistance et l'intégrité des données de billetterie.
+
+### Décomposition en Microservices et Silos
+Le projet est décomposé en services autonomes (Auth, User, Event, etc.) pour permettre un développement et une scalabilité indépendants. 
+- **Silos de données** : Conformément aux bonnes pratiques microservices, chaque service possède son propre "silo" de données (une base de données dédiée). Cela évite le couplage fort entre les services.
+- **Double Base de Données (Master/Replica)** : Chaque silo est doublé. Le Master gère les écritures pour garantir la cohérence, tandis que le Replica gère les lectures, augmentant ainsi la disponibilité et les performances globales.
+
+### Pourquoi Load Balancer pour tous les services ?
+L'API Gateway seule ne suffit pas à garantir la haute disponibilité. Si une instance d'un service tombe, le Load Balancer interne détecte l'échec et redirige le trafic vers les instances saines. Sans cette couche intermédiaire, la Gateway tenterait d'envoyer des requêtes vers des services indisponibles, provoquant des erreurs en cascade.
+
 ## Installation et Lancement
 
 ### Prérequis

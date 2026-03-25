@@ -72,6 +72,24 @@ graph TD
     end
 ```
 
+## Justifications Techniques
+
+### Pourquoi Patroni pour les services critiques ?
+Dans cette architecture, nous avons identifié le **Booking** (réservations) et le **Payment** (paiements) comme étant les services les plus critiques. Toute indisponibilité de leur base de données paralyserait le système complet.
+- **Patroni** a été choisi pour assurer un **failover automatique**. Si le Master d'un cluster tombe, Patroni (en s'appuyant sur le consensus **ETCD**) élit instantanément un nouveau leader parmi les réplicas.
+- Cela garantit une continuité de service sans intervention humaine, contrairement à la version de base où le basculement est manuel.
+
+### Nginx vs HAProxy
+Nous utilisons **Nginx** pour l'ensemble des Load Balancers (frontaux et internes). Bien que HAProxy soit extrêmement performant, Nginx offre une plus grande polyvalence (gestion du cache, service de fichiers statiques pour le frontend) et une syntaxe de configuration plus lisible et rapide à mettre en œuvre dans un cadre de démonstration.
+
+### PostgreSQL et Silos Microservices
+- **PostgreSQL** : Choisi pour sa solidité et sa conformité ACID, indispensable pour des transactions financières et de billetterie.
+- **Silos Microservices** : Chaque service dispose de sa propre infrastructure de donnée. Cette isolation garantit qu'une corruption ou une surcharge sur le service "Notification" n'impactera jamais le service "Payment".
+- **Double/Triple DB** : Chaque service dispose d'au moins deux instances de base de données (Master/Slave). Cela permet de déporter les requêtes de lecture (SELECT) sur les réplicas, libérant ainsi le Master pour les opérations d'écriture et augmentant la réactivité globale.
+
+### Haute Disponibilité par Load Balancing
+Chaque microservice est protégé par son propre Load Balancer. Cette approche est préférée à une Gateway centralisée unique car elle permet une **résilience granulaire**. Si une instance d'un service rencontre une erreur fatale, le Load Balancer interne redirige le flux vers les instances saines de manière transparente pour l'utilisateur final.
+
 ## Pour Aller Plus Loin
 
 Cette version a été développée pour illustrer les mécanismes de résilience requis en production réelle :
