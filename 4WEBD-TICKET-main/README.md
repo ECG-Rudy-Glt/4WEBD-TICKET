@@ -18,6 +18,8 @@ Ce projet répond spécifiquement aux besoins énoncés :
 
 Le système est découpé en services autonomes communiquant via REST (synchrone) et RabbitMQ (asynchrone).
 
+![Architecture](img/archi.png)
+
 ```mermaid
 graph TD
     User((Utilisateur)) --> N[Nginx Frontal]
@@ -55,7 +57,6 @@ graph TD
 
     subgraph "Infrastructure"
         RMQ[RabbitMQ]
-        RED[Redis]
     end
 
     %% Communication Asynchrone
@@ -67,7 +68,6 @@ graph TD
 ### Points Clés
 - **Réplication de Données** : Chaque service possède sa propre base de données PostgreSQL configurée avec un Master (écriture) et un Replica (lecture via WAL streaming).
 - **Asynchronisme** : L'achat d'un billet déclenche un message dans RabbitMQ, permettant au système de notifier l'utilisateur sans bloquer le flux principal.
-- **Performance** : Utilisation de Redis pour optimiser la gestion des places disponibles et éviter la survente lors de fortes charges.
 
 ## Justifications Techniques
 
