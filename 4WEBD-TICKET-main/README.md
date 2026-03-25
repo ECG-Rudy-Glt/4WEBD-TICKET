@@ -18,6 +18,8 @@ Ce projet répond spécifiquement aux besoins énoncés :
 
 Le système est découpé en services autonomes communiquant via REST (synchrone) et RabbitMQ (asynchrone).
 
+![Architecture](img/archi.png)
+
 ```mermaid
 graph TD
     User((Utilisateur)) --> N[Nginx Frontal]
@@ -54,7 +56,6 @@ graph TD
 
     subgraph "Infrastructure"
         RMQ[RabbitMQ]
-        RED[Redis]
     end
 
     %% Communication Asynchrone
