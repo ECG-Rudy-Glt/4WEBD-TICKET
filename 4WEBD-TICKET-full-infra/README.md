@@ -4,7 +4,7 @@ Ce dossier présente une extension avancée du projet TicketApp, conçue pour d�
 
 ## Caractéristiques Principales
 
-L'architecture full-infra repose sur 45 conteneurs orchestrés pour offrir une disponibilité maximale. Elle intègre des composants critiques absents de la version standard :
+L'architecture full-infra repose sur 46 conteneurs orchestrés pour offrir une disponibilité maximale. Elle intègre des composants critiques absents de la version standard :
 
 - **Automatic Failover** : Utilisation de **Patroni** et **ETCD** pour garantir une bascule automatique des bases de données de réservation et de paiement en moins de 30 secondes.
 - **Orchestration Massive** : Déploiement de **46 conteneurs** assurant la redondance de chaque couche.
@@ -37,7 +37,7 @@ graph TD
     end
 
     subgraph "Microservices Répliqués"
-        ALB --> AS[Auth Service Replicas]
+        ALB --> AS[Auth Service Replicas - Stateless JWT]
         ULB --> US[User Service Replicas]
         ELB --> ES[Event Service Replicas]
         BLB --> BS[Booking Service Replicas]
@@ -58,8 +58,7 @@ graph TD
         end
         
         subgraph "Standard Silos"
-            AS & US & ES --- PGB_STD[PgBouncer Standard]
-            PGB_STD --- ADB[(Auth DB Master/Slave)]
+            US & ES --- PGB_STD[PgBouncer Standard]
             PGB_STD --- UDB[(User DB Master/Slave)]
             PGB_STD --- EDB[(Event DB Master/Slave)]
         end
@@ -101,7 +100,7 @@ Cette version a été développée pour illustrer les mécanismes de résilience
 
 Depuis ce dossier :
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 - Frontend : `http://localhost`
 - API Gateway : `http://localhost/api`

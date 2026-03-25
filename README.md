@@ -20,13 +20,13 @@
 
 | Caractéristique | 4WEBD-TICKET-main (À NOTER) | 4WEBD-TICKET-full-infra (Extension HA) |
 |-----------------|-----------------------------|-----------------------------------------|
-| **Architecture** | Microservices (Silos de données) | Microservices HA (45+ conteneurs) |
+| **Architecture** | Microservices (Silos de données) | Microservices HA (46 conteneurs) |
 | **Nombre de conteneurs** | **30 conteneurs** | **46 conteneurs** |
 | **Bases de données** | PostgreSQL Master-Slave | Patroni (HA) + PgBouncer |
 | **Load Balancing** | Nginx Edge Proxy + LBs Internes (Round Robin) | Nginx Edge + LBs Internes (Round Robin) |
 | **Failover DB** | Manuel / Réplication WAL | **Automatique (<30s)** via Patroni/ETCD |
 | **Gestion Connexions** | Directe vers Pools PostgreSQL | **Pooler PgBouncer** (Optimisation CPU) |
-| **Performance** | Cache Redis | Cache Redis + Verrous Atomiques |
+| **Performance** | Réplication en lecture (Replica) | Cache Redis + Verrous Atomiques |
 
 ---
 
@@ -35,7 +35,7 @@
 La version "full-infra" a été conçue pour répondre aux contraintes de charge extrême (événements de type "Star Tour").
 
 ### PgBouncer et Gestion des Connexions
-L'utilisation de **PgBouncer** est indispensable pour prévenir la saturation du processeur sur les serveurs PostgreSQL. Dans une architecture à 45 conteneurs, le nombre de connexions simultanées pourrait excéder les capacités des bases de données. PgBouncer agit comme une couche de multiplexage, permettant de maintenir un pool de connexions actives réduit tout en acceptant un grand nombre de requêtes clients.
+L'utilisation de **PgBouncer** est indispensable pour prévenir la saturation du processeur sur les serveurs PostgreSQL. Dans une architecture à 46 conteneurs, le nombre de connexions simultanées pourrait excéder les capacités des bases de données. PgBouncer agit comme une couche de multiplexage, permettant de maintenir un pool de connexions actives réduit tout en acceptant un grand nombre de requêtes clients.
 
 ### Patroni et ETCD pour la Haute Disponibilité
 Pour les services critiques que sont **Booking** (réservations) et **Payment** (transactions), toute interruption de service ou perte de données est proscrite. 

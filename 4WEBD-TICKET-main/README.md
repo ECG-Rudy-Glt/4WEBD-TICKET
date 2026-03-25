@@ -36,7 +36,7 @@ graph TD
     end
 
     subgraph "Microservices"
-        ALB --> AS[Auth Service Replicas]
+        ALB --> AS[Auth Service Replicas - Stateless JWT]
         ULB --> US[User Service Replicas]
         ELB --> ES[Event Service Replicas]
         BLB --> BS[Booking Service Replicas]
@@ -45,7 +45,6 @@ graph TD
     end
 
     subgraph "Persistance (Master/Replica)"
-        AS --> ADB[(Auth DBs)]
         US --> UDB[(User DBs)]
         ES --> EDB[(Event DBs)]
         BS --> BDB[(Booking DBs)]
@@ -67,7 +66,7 @@ graph TD
 ### Points Clés
 - **Réplication de Données** : Chaque service possède sa propre base de données PostgreSQL configurée avec un Master (écriture) et un Replica (lecture via WAL streaming).
 - **Asynchronisme** : L'achat d'un billet déclenche un message dans RabbitMQ, permettant au système de notifier l'utilisateur sans bloquer le flux principal.
-- **Performance** : Utilisation de Redis pour optimiser la gestion des places disponibles et éviter la survente lors de fortes charges.
+- **Performance** : Utilisation de la réplication en lecture (Replica) pour décharger le Master des requêtes SELECT et améliorer la réactivité globale.
 
 ## Justifications Techniques
 
@@ -123,7 +122,7 @@ chmod +x services/booking/db/init-replica.sh \
 ### Lancement
 
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 - Frontend : `http://localhost:8080`
 - API Gateway : `http://localhost:3030/api`
