@@ -1,6 +1,6 @@
 # Projet 4WEBD-TICKET — Plateforme de Réservation de Billets
 
-Bienvenue dans le dépôt du projet 4WEBD-TICKET. Ce projet a été développé dans le cadre du module 4WEBD (SUPINFO) pour répondre aux exigences d'une plateforme SaaS de billetterie haute disponibilité.
+
 
 ---
 
@@ -21,7 +21,7 @@ Bienvenue dans le dépôt du projet 4WEBD-TICKET. Ce projet a été développé 
 | **Architecture** | Microservices (Silos de données) | Microservices HA (45+ conteneurs) |
 | **Nombre de conteneurs** | **30 conteneurs** | **46 conteneurs** |
 | **Bases de données** | PostgreSQL Master-Slave | Patroni (HA) + PgBouncer |
-| **Load Balancing** | Nginx Edge Proxy | Nginx Edge + LBs Internes (Round Robin) |
+| **Load Balancing** | Nginx Edge Proxy + LBs Internes (Round Robin) | Nginx Edge + LBs Internes (Round Robin) |
 | **Failover DB** | Manuel / Réplication WAL | **Automatique (<30s)** via Patroni/ETCD |
 | **Gestion Connexions** | Directe vers Pools PostgreSQL | **Pooler PgBouncer** (Optimisation CPU) |
 | **Performance** | Cache Redis | Cache Redis + Verrous Atomiques |
@@ -51,37 +51,3 @@ L'analyse de la criticité des opérations a conduit aux choix suivants :
 - **Processus d'Achat** : Utilisation de RabbitMQ pour une gestion asynchrone, permettant de lisser les pics de charge et d'assurer qu'aucune transaction n'est perdue.
 - **Récupération des données** : Les lectures sont distribuées sur les réplicas PostgreSQL afin de garantir la disponibilité des services de consultation même en cas d'indisponibilité du nœud d'écriture.
 - **Observabilité** : L'intégration de **Zipkin** permet un traçage distribué des requêtes, essentiel pour le diagnostic en environnement microservices.
-
----
-
-## Réponses aux Exigences du Cahier des Charges
-
-### Fonctionnalités implémentées
-- **Interfaces CRUD** : Gestion des utilisateurs, des événements et des billets.
-- **Sécurité** : Authentification et autorisation via JWT, gestion des rôles (Admin, Creator, User).
-- **Transactions** : Circuit de réservation asynchrone validé par le service de paiement.
-- **Notifications** : Système de confirmation simulé via RabbitMQ (Logs et base de données dédiés).
-
-### Questions Étudiantes
-1. **Architecture** : Microservices conteneurisés via Docker Compose.
-2. **Prévention de la survente** : Utilisation de verrous atomiques **Redis (DECR)** pour la gestion des stocks en temps réel.
-3. **Sécurité des données** : Hachage des mots de passe avec BCRYPT et association unique utilisateur-billet.
-4. **Performance** : Temps de latence cible inférieur à 300ms grâce à l'asynchronisme.
-5. **Sauvegardes** : Automatisation des backups pour la base de données de paiement (`cron-backup`).
-6. **Documentation** : Spécifications OpenAPI/Swagger détaillant l'ensemble des points de terminaison.
-
----
-
-## Guide d'Installation
-
-1. Cloner le dépôt.
-2. Accéder au répertoire du projet souhaité (`main` ou `full-infra`).
-3. Lancer l'infrastructure :
-   ```bash
-   docker-compose up -d --build
-   ```
-4. Point d'accès utilisateur : `http://localhost`.
-5. Monitoring : Interface RabbitMQ (`:15672`), Zipkin (`:9411`).
-
----
-*Projet réalisé par Groupe 2*
