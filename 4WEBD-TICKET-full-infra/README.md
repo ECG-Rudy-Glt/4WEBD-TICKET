@@ -8,6 +8,8 @@ L'architecture full-infra repose sur 45 conteneurs orchestrés pour offrir une d
 
 - **Automatic Failover** : Utilisation de **Patroni** et **ETCD** pour garantir une bascule automatique des bases de données de réservation et de paiement en moins de 30 secondes.
 - **Orchestration Massive** : Déploiement de **46 conteneurs** assurant la redondance de chaque couche.
+- **Gestion Automatisée des Réplicas** : Contrairement à la version `main` qui utilise des scripts `init-replica.sh`, la version `full-infra` s'appuie sur les fonctionnalités natives des images **Bitnami Legacy** pour configurer la réplication Master/Slave et le failover Patroni de manière transparente via des variables d'environnement.
+- **Images Bitnami Legacy** : Utilisation volontaire des images `bitnamilegacy` (PostgreSQL, PgBouncer, ETCD). Ces versions "dépréciées" mais stables permettent une configuration HA complète et gratuite, là où les nouvelles versions Bitnami imposent désormais des restrictions ou des coûts de licence.
 - **Connection Pooling** : Implémentation de **PgBouncer** pour optimiser les performances et la consommation de ressources CPU des serveurs de base de données.
 - **Load Balancing Multi-Niveau** : Redondance des services avec des Load Balancers internes (Nginx) pour une distribution de charge équilibrée.
 - **Atomic Locks** : Utilisation de **Redis** pour sécuriser les transactions de billetterie et prévenir toute survente ("Star Tour").
