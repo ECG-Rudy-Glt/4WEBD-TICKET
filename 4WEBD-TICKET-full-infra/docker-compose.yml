@@ -109,15 +109,9 @@ services:
       context: ./services/auth/auth-service
     environment:
       PORT: 3000
-      DATABASE_URL: 
-        postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}
-      DATABASE_REPLICA_URL: 
-        postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}_readonly
       JWT_SECRET: ${JWT_SECRET}
       USER_URL: http://user-lb:3010/users
     depends_on:
-      auth-pgbouncer:
-        condition: service_started
       user-lb:
         condition: service_started
     restart: unless-stopped
@@ -127,70 +121,11 @@ services:
       context: ./services/auth/auth-service
     environment:
       PORT: 3000
-      DATABASE_URL: 
-        postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}
-      DATABASE_REPLICA_URL: 
-        postgresql://${AUTH_DB_USER:-auth_user}:${AUTH_DB_PASSWORD:-auth_pass}@auth-pgbouncer:6432/${AUTH_DB_NAME:-auth_db}_readonly
       JWT_SECRET: ${JWT_SECRET}
       USER_URL: http://user-lb:3010/users
     depends_on:
-      auth-pgbouncer:
-        condition: service_started
       user-lb:
         condition: service_started
-    restart: unless-stopped
-
-  auth-pgbouncer:
-    image: bitnamilegacy/pgbouncer:latest
-    environment:
-      POSTGRESQL_HOST: auth-db
-      POSTGRESQL_USERNAME: auth_user
-      POSTGRESQL_PASSWORD: auth_pass
-      POSTGRESQL_DATABASE: auth_db
-      PGBOUNCER_POOL_MODE: transaction
-      PGBOUNCER_MAX_CLIENT_CONN: 200
-      PGBOUNCER_DEFAULT_POOL_SIZE: 20
-    volumes:
-    - ./infra/pgbouncer/auth/pgbouncer.ini:/bitnami/pgbouncer/conf/pgbouncer.ini
-    - ./infra/pgbouncer/auth/userlist.txt:/bitnami/pgbouncer/conf/userlist.txt
-    depends_on:
-      auth-db:
-        condition: service_healthy
-    restart: unless-stopped
-
-  auth-db:
-    image: bitnamilegacy/postgresql:16-debian-12
-    environment:
-      POSTGRESQL_USERNAME: ${AUTH_DB_USER:-auth_user}
-      POSTGRESQL_PASSWORD: ${AUTH_DB_PASSWORD:-auth_pass}
-      POSTGRESQL_DATABASE: ${AUTH_DB_NAME:-auth_db}
-      POSTGRESQL_REPLICATION_MODE: master
-      POSTGRESQL_REPLICATION_USER: ${REPLICATION_USER:-replicator}
-      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-auth_user}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    volumes:
-    - auth-pgdata:/bitnami/postgresql
-    restart: unless-stopped
-
-  auth-db-replica:
-    image: bitnamilegacy/postgresql:16-debian-12
-    environment:
-      POSTGRESQL_REPLICATION_MODE: slave
-      POSTGRESQL_MASTER_HOST: auth-db
-      POSTGRESQL_MASTER_PORT_NUMBER: 5432
-      POSTGRESQL_USERNAME: ${AUTH_DB_USER:-auth_user}
-      POSTGRESQL_PASSWORD: ${AUTH_DB_PASSWORD:-auth_pass}
-      POSTGRESQL_REPLICATION_USER: ${REPLICATION_USER:-replicator}
-      POSTGRESQL_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator_pass}
-    depends_on:
-      auth-db:
-        condition: service_healthy
-    volumes:
-    - auth-pgreplica:/bitnami/postgresql
     restart: unless-stopped
 
   # ═══════════════════════════════════════════════════════════
@@ -919,8 +854,7 @@ services:
     restart: unless-stopped
 volumes:
   # Standard silos (Bitnami master/slave)
-  auth-pgdata:
-  auth-pgreplica:
+
   user-pgdata:
   user-pgreplica:
   event-pgdata:

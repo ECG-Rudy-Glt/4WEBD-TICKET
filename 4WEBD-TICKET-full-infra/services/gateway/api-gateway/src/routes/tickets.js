@@ -3,6 +3,15 @@ import * as bookingService from '../services/booking.service.js';
 
 const router = Router();
 
+router.get('/', async (req, res) => {
+    try {
+        const tickets = await bookingService.getAllTickets();
+        res.json(tickets);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+});
+
 router.get('/user/:userId', async (req, res) => {
     try {
         const tickets = await bookingService.getTicketsByUser(req.params.userId);

@@ -1,5 +1,11 @@
 const BOOKING_URL = process.env.BOOKING_URL;
 
+export async function getAllTickets() {
+    const response = await fetch(`${BOOKING_URL}`);
+    const body = await response.json();
+    return Array.isArray(body) ? body : (body.data || []);
+}
+
 export async function getTicketsByUser(userId) {
     const response = await fetch(`${BOOKING_URL}/user/${userId}`);
     const body = await response.json();

@@ -50,4 +50,4 @@ tags:
   noloadbalance: false
   clonefrom: false
   nosync: false
-  priority: ${PATRONI_PRIORITY:-50}
+  priority: ${PATRONI_PRIORITY}
