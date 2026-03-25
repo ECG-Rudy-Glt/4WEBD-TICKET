@@ -7,18 +7,22 @@ const pool = new Pool({
 });
 
 export async function initDb() {
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS users (
-            id          SERIAL PRIMARY KEY,
-            firstname   VARCHAR(100) NOT NULL,
-            lastname    VARCHAR(100) NOT NULL,
-            email       VARCHAR(255) UNIQUE NOT NULL,
-            phone       VARCHAR(20),
-            password    VARCHAR(255) NOT NULL,
-            role        VARCHAR(20) NOT NULL DEFAULT 'user',
-            "createdAt" TIMESTAMPTZ DEFAULT NOW()
-        )
-    `);
+    try {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id          SERIAL PRIMARY KEY,
+                firstname   VARCHAR(100) NOT NULL,
+                lastname    VARCHAR(100) NOT NULL,
+                email       VARCHAR(255) UNIQUE NOT NULL,
+                phone       VARCHAR(20),
+                password    VARCHAR(255) NOT NULL,
+                role        VARCHAR(20) NOT NULL DEFAULT 'user',
+                "createdAt" TIMESTAMPTZ DEFAULT NOW()
+            )
+        `);
+    } catch (e) {
+        if (e.code !== '23505') throw e;
+    }
     console.log('[auth-service] DB prête');
 }
 
