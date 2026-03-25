@@ -1,0 +1,42 @@
+.
+├── 📂 services/                    # Le cœur de métier (Micro-services)
+│   ├── 📂 auth-service/            # Gestion RBAC (Admin, Creator, etc.)
+│   │   ├── 📄 Dockerfile
+│   │   ├── 📂 src/
+│   │   └── 📄 requirements.txt     # ou package.json
+│   ├── 📂 user-service/            # CRUD Profils utilisateurs
+│   │   ├── 📄 Dockerfile
+│   │   └── 📂 src/
+│   ├── 📂 event-service/           # CRUD Concerts & Inventaire
+│   │   ├── 📄 Dockerfile
+│   │   └── 📂 src/
+│   ├── 📂 booking-service/         # Logique d'achat & Verrous Redis
+│   │   ├── 📄 Dockerfile
+│   │   └── 📂 src/
+│   ├── 📂 payment-service/         # Transactions CB & Sécurité
+│   │   ├── 📄 Dockerfile
+│   │   └── 📂 src/
+│   └── 📂 notification-service/    # Worker asynchrone (Twilio Mock)
+│       ├── 📄 Dockerfile
+│       └── 📂 src/
+│
+├── 📂 infra/                       # Configuration de l'infrastructure
+│   ├── 📂 nginx/                   # Load Balancer Frontal
+│   │   └── 📄 nginx.conf
+│   ├── 📂 pgbouncer/               # Pooler de connexion SQL
+│   │   └── 📄 pgbouncer.ini
+│   ├── 📂 postgres/                # Scripts d'initialisation DB
+│   │   └── 📂 init-scripts/
+│   │       ├── 📄 01-init-databases.sql
+│   │       └── 📄 02-setup-replication.sql
+│   └── 📂 otel-collector/          # Tracing avec Jaeger
+│       └── 📄 otel-config.yaml
+│
+├── 📂 scripts/                     # Scripts utilitaires
+│   ├── 📄 backup-payment.sh        # Le fameux Cron de backup légal
+│   └── 📄 seed-data.sh             # Pour remplir les DB au début
+│
+├── 📄 .env                         # Variables d'env (secrets, tokens)
+├── 📄 .gitignore
+├── 📄 docker-compose.yml           # L'orchestrateur (30 containers)
+└── 📄 README.md                    # Documentation pour la soutenance
