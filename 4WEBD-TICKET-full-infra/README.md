@@ -12,6 +12,8 @@ L'architecture full-infra repose sur 45 conteneurs orchestrés pour offrir une d
 - **Load Balancing Multi-Niveau** : Redondance des services avec des Load Balancers internes (Nginx) pour une distribution de charge équilibrée.
 - **Atomic Locks** : Utilisation de **Redis** pour sécuriser les transactions de billetterie et prévenir toute survente ("Star Tour").
 
+> *Note : Cette architecture est extrêmement "overkill" pour un environnement Docker Compose sur un seul serveur. Elle est conçue pour démontrer une expertise en haute disponibilité (HA) et en résilience réseau.*
+
 ## Schéma d'Architecture (Haute Disponibilité)
 
 ```mermaid

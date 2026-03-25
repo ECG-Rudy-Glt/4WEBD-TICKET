@@ -26,7 +26,7 @@ Start-Sleep -Seconds 3
 
 Write-Host ""
 Write-Host "[2] Chaos Engineering: Tuer le leader de la DB Booking (booking-db-1) et le replica 1 du Booking Service..."
-docker kill 4webd-ticket-full-infra-booking-db-1
+docker kill 4webd-ticket-full-infra-booking-db-1-1
 docker kill 4webd-ticket-full-infra-booking-service-1
 
 Write-Host "Containers tués ! Les requêtes s'exécutent toujours..."
@@ -44,11 +44,12 @@ try {
 
 Write-Host ""
 Write-Host "[4] Résultats des requêtes continues pendant le crash :"
-Receive-Job -Job $job -Keep
-Remove-Job -Job $job
+Wait-Job -Job $job -Timeout 35 | Out-Null
+Receive-Job -Job $job
+Remove-Job -Job $job -Force
 
 Write-Host "[5] Relance des containers tués pour rétablir l'état initial..."
-docker start 4webd-ticket-full-infra-booking-db-1
+docker start 4webd-ticket-full-infra-booking-db-1-1
 docker start 4webd-ticket-full-infra-booking-service-1
 
 $resultString = @"

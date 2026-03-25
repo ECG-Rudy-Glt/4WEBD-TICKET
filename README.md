@@ -11,6 +11,8 @@
 > Ce dossier implémente l'intégralité des fonctionnalités requises de manière optimale et conforme au cahier des charges.
 >
 > Le dossier **`4WEBD-TICKET-full-infra`** constitue une extension technique destinée à démontrer la mise en œuvre d'une infrastructure de production hautement disponible et résiliente. **Bien que ce dossier ne doive pas être noté, il repose sur le même code applicatif que la version de référence.**
+>
+> *Note : Ces deux configurations sont délibérément "overkill" pour un déploiement sur un serveur unique (Docker Compose), mais elles servent à simuler une architecture distribuée réelle sur plusieurs serveurs physiques ou clusters.*
 
 ---
 

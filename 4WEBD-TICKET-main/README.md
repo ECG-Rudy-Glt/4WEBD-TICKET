@@ -10,8 +10,9 @@ Ce projet répond spécifiquement aux besoins énoncés :
 - **Authentification et Autorisation** : Gestion sécurisée via `auth-service` (JWT).
 - **Processus d'Achat** : Gestion transactionnelle via `booking-service` et validation de paiement via `payment-service`.
 - **Notifications** : Système asynchrone via `notification-service` (simulation Email/SMS).
-- **Haute Disponibilité** : Tous les services critiques sont répliqués et protégés par des Load Balancers.
+- **Haute Disponibilité** : Tous les services critiques sont répliqués et protégés par des **Load Balancers internes (Nginx)**, assurant une distribution de charge efficace.
 - **Déploiement** : Orchestration de **30 conteneurs** Docker.
+- **Contexte** : Bien que cette architecture soit "overkill" pour un déploiement sur une seule machine, elle démontre une conception prête pour le passage à l'échelle (scale-out).
 
 ## Architecture Technique
 
