@@ -382,12 +382,16 @@ services:
       - EVENT_URL=${EVENT_URL}
       - AUTH_URL=${AUTH_URL}
       - BOOKING_URL=${BOOKING_URL}
+      - PAYMENT_URL=${PAYMENT_URL}
+      - NOTIFICATION_URL=${NOTIFICATION_URL}
       - RABBITMQ_URL=${RABBITMQ_URL}
     depends_on:
       - user-lb
       - event-lb
       - auth-lb
       - booking-lb
+      - payment-service
+      - notification-service
       - rabbitmq
 
   api-gateway-2:
@@ -400,12 +404,16 @@ services:
       - EVENT_URL=${EVENT_URL}
       - AUTH_URL=${AUTH_URL}
       - BOOKING_URL=${BOOKING_URL}
+      - PAYMENT_URL=${PAYMENT_URL}
+      - NOTIFICATION_URL=${NOTIFICATION_URL}
       - RABBITMQ_URL=${RABBITMQ_URL}
     depends_on:
       - user-lb
       - event-lb
       - auth-lb
       - booking-lb
+      - payment-service
+      - notification-service
       - rabbitmq
 
   gateway-lb:

@@ -41,6 +41,15 @@ router.get('/', requireAuth, requireRole('admin'), async (req, res) => {
     }
 });
 
+router.get('/me', requireAuth, async (req, res) => {
+    try {
+        const user = await userService.getUserById(req.user.id);
+        res.json(user);
+    } catch (err) {
+        res.status(err.status || 500).json({ error: err.message });
+    }
+});
+
 router.get('/:id', async (req, res) => {
     try {
         const user = await userService.getUserById(parseInt(req.params.id));

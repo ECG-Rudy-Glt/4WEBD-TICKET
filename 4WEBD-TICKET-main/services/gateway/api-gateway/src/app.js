@@ -6,6 +6,8 @@ import userRoutes from './routes/users.js';
 import eventRoutes from './routes/events.js';
 import bookingRoutes from './routes/bookings.js';
 import ticketRoutes from './routes/tickets.js';
+import paymentRoutes from './routes/payments.js';
+import notificationRoutes from './routes/notifications.js';
 import { connectQueue } from './services/queue.service.js';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './swagger.js';
@@ -28,6 +30,8 @@ app.use('/users', userRoutes);
 app.use('/events', eventRoutes);
 app.use('/bookings', bookingRoutes);
 app.use('/tickets', ticketRoutes);
+app.use('/payments', paymentRoutes);
+app.use('/notifications', notificationRoutes);
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
