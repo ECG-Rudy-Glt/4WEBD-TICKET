@@ -85,3 +85,23 @@ docker compose up -d --build
 - Frontend : `http://localhost:8080`
 - API Gateway : `http://localhost:3030/api`
 - RabbitMQ UI : `http://localhost:15672`
+
+### Données de Test
+
+Pour remplir la base de données avec des données fictives (utilisateurs et événements), vous pouvez utiliser le script de seeding :
+
+```bash
+# Accorder les droits d'exécution
+chmod +x scripts/seed-data.sh
+
+# Exécuter le script
+./scripts/seed-data.sh
+```
+
+Ce script crée les 3 utilisateurs suivants :
+
+| Rôle | Email | Mot de passe |
+|------|-------|--------------|
+| **Admin** | admin@admin.com | admin1234 |
+| **Organisateur** | operator@operator.com | operator1234 |
+| **Utilisateur** | user@user.com | user1234 |
