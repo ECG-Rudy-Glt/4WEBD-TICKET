@@ -59,7 +59,6 @@ export async function deleteEvent(id) {
     if (!res.rows.length) throw { status: 404, message: "Événement non trouvé" };
 }
 
-// Décrémente atomiquement (anti-survente)
 export async function decrementCapacity(id, quantity) {
     const res = await pool.query(
         `UPDATE events SET "availableTickets" = "availableTickets" - $1

@@ -42,7 +42,6 @@ export async function startConsumer() {
             console.log('[booking-service] Réservation reçue:', data);
 
             try {
-                // Décrémente les places (atomique, anti-survente)
                 const response = await fetch(`${EVENT_URL}/${data.eventId}/capacity/decrement`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -56,7 +55,6 @@ export async function startConsumer() {
 
                 const ticket = await createTicket(data);
 
-                // Publie dans la queue payments
                 payChannel.sendToQueue(PAYMENT_QUEUE, Buffer.from(JSON.stringify({
                     ticketId:     ticket.id,
                     ticketCode:   ticket.ticketCode,
@@ -75,7 +73,6 @@ export async function startConsumer() {
             } catch (err) {
                 console.error('[booking-service] Erreur:', err.message);
 
-                // Notifie l'utilisateur de l'échec
                 if (notifChannel) {
                     notifChannel.sendToQueue(NOTIF_QUEUE, Buffer.from(JSON.stringify({
                         type:       'booking_failed',

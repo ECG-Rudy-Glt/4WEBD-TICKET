@@ -59,7 +59,6 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-// Routes internes (appelées par booking/payment)
 router.patch('/:id/capacity/decrement', async (req, res) => {
     try {
         res.json(await eventService.decrementCapacity(parseInt(req.params.id), req.body.quantity));

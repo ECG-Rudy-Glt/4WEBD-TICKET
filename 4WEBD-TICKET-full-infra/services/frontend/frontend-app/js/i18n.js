@@ -1,6 +1,5 @@
 const TRANSLATIONS = {
     fr: {
-        // Navigation
         nav_events: 'Événements',
         nav_my_tickets: 'Mes billets',
         nav_login: 'Connexion',
@@ -8,7 +7,6 @@ const TRANSLATIONS = {
         nav_admin: 'Admin',
         nav_logout: 'Déconnexion',
 
-        // Events page
         events_title: 'Événements disponibles',
         events_loading: 'Chargement...',
         events_none: 'Aucun événement disponible.',
@@ -16,7 +14,6 @@ const TRANSLATIONS = {
         events_buy_btn: 'Acheter un billet',
         events_seats: 'place(s)',
 
-        // Buy page
         buy_back: '← Retour',
         buy_title: 'Acheter un billet',
         buy_qty_label: 'Quantité',
@@ -28,7 +25,6 @@ const TRANSLATIONS = {
         buy_event_load_error: "Impossible de charger l'événement.",
         buy_price_per_ticket: '/ billet',
 
-        // My tickets page
         tickets_title: 'Mes billets',
         tickets_login_required: 'Connectez-vous pour voir vos billets.',
         tickets_none: 'Aucun billet.',
@@ -36,14 +32,12 @@ const TRANSLATIONS = {
         tickets_code_label: 'Code :',
         tickets_seats: 'place(s)',
 
-        // Login page
         login_title: 'Connexion',
         login_email_label: 'Email',
         login_email_placeholder: 'email@exemple.com',
         login_pwd_label: 'Mot de passe',
         login_submit: 'Se connecter',
 
-        // Register page
         register_title: 'Inscription',
         register_firstname_label: 'Prénom',
         register_lastname_label: 'Nom',
@@ -51,7 +45,6 @@ const TRANSLATIONS = {
         register_pwd_label: 'Mot de passe',
         register_submit: "S'inscrire",
 
-        // Admin page
         admin_title: 'Administration',
         admin_create_event_title: 'Créer un événement',
         admin_field_title: 'Titre',
@@ -85,20 +78,16 @@ const TRANSLATIONS = {
         admin_tickets_none: 'Aucun billet trouvé.',
         admin_seats: 'place(s)',
 
-        // Generic
         error_generic: 'Une erreur est survenue.',
         code_label: 'Code:',
 
-        // Lang switcher
         lang_fr: 'FR',
         lang_en: 'EN',
 
-        // Date locale
         date_locale: 'fr-FR',
     },
 
     en: {
-        // Navigation
         nav_events: 'Events',
         nav_my_tickets: 'My Tickets',
         nav_login: 'Login',
@@ -106,7 +95,6 @@ const TRANSLATIONS = {
         nav_admin: 'Admin',
         nav_logout: 'Logout',
 
-        // Events page
         events_title: 'Available Events',
         events_loading: 'Loading...',
         events_none: 'No events available.',
@@ -114,7 +102,6 @@ const TRANSLATIONS = {
         events_buy_btn: 'Buy a ticket',
         events_seats: 'seat(s)',
 
-        // Buy page
         buy_back: '← Back',
         buy_title: 'Buy a ticket',
         buy_qty_label: 'Quantity',
@@ -126,7 +113,6 @@ const TRANSLATIONS = {
         buy_event_load_error: 'Unable to load event.',
         buy_price_per_ticket: '/ ticket',
 
-        // My tickets page
         tickets_title: 'My Tickets',
         tickets_login_required: 'Please log in to see your tickets.',
         tickets_none: 'No tickets.',
@@ -134,14 +120,12 @@ const TRANSLATIONS = {
         tickets_code_label: 'Code:',
         tickets_seats: 'seat(s)',
 
-        // Login page
         login_title: 'Login',
         login_email_label: 'Email',
         login_email_placeholder: 'email@example.com',
         login_pwd_label: 'Password',
         login_submit: 'Sign in',
 
-        // Register page
         register_title: 'Register',
         register_firstname_label: 'First name',
         register_lastname_label: 'Last name',
@@ -149,7 +133,6 @@ const TRANSLATIONS = {
         register_pwd_label: 'Password',
         register_submit: 'Sign up',
 
-        // Admin page
         admin_title: 'Administration',
         admin_create_event_title: 'Create an event',
         admin_field_title: 'Title',
@@ -183,15 +166,12 @@ const TRANSLATIONS = {
         admin_tickets_none: 'No tickets found.',
         admin_seats: 'seat(s)',
 
-        // Generic
         error_generic: 'An error occurred.',
         code_label: 'Code:',
 
-        // Lang switcher
         lang_fr: 'FR',
         lang_en: 'EN',
 
-        // Date locale
         date_locale: 'en-US',
     }
 };
@@ -207,26 +187,21 @@ function setLang(lang) {
     currentLang = lang;
     localStorage.setItem('lang', lang);
     applyTranslations();
-    // Refresh dynamic content
     if (typeof refreshCurrentPage === 'function') refreshCurrentPage();
 }
 
 function applyTranslations() {
-    // Update html lang attribute
     document.documentElement.lang = currentLang;
 
-    // Update all elements with data-i18n attribute
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         el.textContent = t(key);
     });
 
-    // Update all elements with data-i18n-placeholder attribute
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
         el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
     });
 
-    // Update language switcher buttons
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-lang') === currentLang);
     });

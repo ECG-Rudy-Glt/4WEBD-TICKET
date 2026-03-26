@@ -1,10 +1,5 @@
-/**
- * Cron Backup — Simulation de sauvegarde automatique de la base Payment
- * En production : pg_dump vers un volume ou un stockage S3
- * Ici : console.log pour démontrer le mécanisme
- */
 
-const INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 heures
+const INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 function runBackup() {
   const now = new Date().toISOString();
@@ -13,10 +8,8 @@ function runBackup() {
   console.log(`[cron-backup] ${now} — Backup payment_db terminé avec succès.`);
 }
 
-// Premier backup au démarrage
 runBackup();
 
-// Puis toutes les 6 heures
 setInterval(runBackup, INTERVAL_MS);
 
 console.log('[cron-backup] Service de backup démarré. Intervalle : 6h');

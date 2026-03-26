@@ -13,7 +13,6 @@ COPY patroni.yml.template /etc/patroni/patroni.yml.template
 COPY post_init.sh         /etc/patroni/post_init.sh
 COPY entrypoint.sh        /entrypoint.sh
 
-# Corrige les fins de ligne CRLF (Windows) → LF (Unix)
 RUN sed -i 's/\r//' /entrypoint.sh /etc/patroni/post_init.sh && \
     chmod +x /entrypoint.sh /etc/patroni/post_init.sh
 

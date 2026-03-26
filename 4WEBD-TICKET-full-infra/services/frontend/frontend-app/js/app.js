@@ -4,7 +4,6 @@
     let currentEventId = null;
     let currentPage = 'events';
 
-    // ── Navigation ────────────────────────────────────────
     window.showPage = function (name) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById('page-' + name).classList.add('active');
@@ -13,7 +12,6 @@
         if (name === 'my-tickets') loadMyTickets();
     };
 
-    // Called by i18n when language changes — reloads dynamic content
     window.refreshCurrentPage = function () {
         if (currentPage === 'events')     loadEvents();
         if (currentPage === 'my-tickets') loadMyTickets();
@@ -58,7 +56,6 @@
         return t('error_generic');
     }
 
-    // ── HTTP helper ───────────────────────────────────────
     async function api(path, options = {}) {
         const res = await fetch(API + path, {
             ...options,
@@ -73,7 +70,6 @@
         return data;
     }
 
-    // ── Events ────────────────────────────────────────────
     async function loadEvents() {
         const list = document.getElementById('events-list');
         try {
@@ -131,7 +127,6 @@
         }
     };
 
-    // ── Tickets ───────────────────────────────────────────
     async function loadMyTickets() {
         const list = document.getElementById('tickets-list');
         if (!token) {
@@ -158,7 +153,6 @@
         }
     }
 
-    // ── Auth ──────────────────────────────────────────────
     window.login = async function () {
         try {
             const res = await api('/auth/login', {
@@ -204,7 +198,6 @@
         showPage('events');
     };
 
-    // ── Admin ─────────────────────────────────────────────
     async function adminLoadEvents() {
         const list = document.getElementById('admin-events-list');
         try {
@@ -282,7 +275,6 @@
         }
     };
 
-    // ── Admin Tickets ─────────────────────────────────────
     window.adminLoadTicketsByEvent = async function (eventId, title) {
         try {
             const tickets = await api('/tickets/event/' + eventId);
@@ -336,7 +328,6 @@
         `).join('');
     }
 
-    // Patch showPage to load admin data
     const _showPage = window.showPage;
     window.showPage = function (name) {
         _showPage(name);
@@ -349,7 +340,6 @@
         }
     };
 
-    // ── Init ──────────────────────────────────────────────
     updateNav();
     applyTranslations();
     loadEvents();

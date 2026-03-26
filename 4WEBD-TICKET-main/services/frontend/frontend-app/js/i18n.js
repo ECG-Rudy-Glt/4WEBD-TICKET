@@ -207,26 +207,21 @@ function setLang(lang) {
     currentLang = lang;
     localStorage.setItem('lang', lang);
     applyTranslations();
-    // Refresh dynamic content
     if (typeof refreshCurrentPage === 'function') refreshCurrentPage();
 }
 
 function applyTranslations() {
-    // Update html lang attribute
     document.documentElement.lang = currentLang;
 
-    // Update all elements with data-i18n attribute
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         el.textContent = t(key);
     });
 
-    // Update all elements with data-i18n-placeholder attribute
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
         el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
     });
 
-    // Update language switcher buttons
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-lang') === currentLang);
     });

@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
 router.get('/by-email/:email', async (req, res) => {
     try {
         const result = await userService.getUserByEmail(req.params.email);
-        res.json(result); // password inclus — usage interne auth-service uniquement
+        res.json(result);
     } catch (err) {
         res.status(err.status || 500).json({ error: err.message });
     }

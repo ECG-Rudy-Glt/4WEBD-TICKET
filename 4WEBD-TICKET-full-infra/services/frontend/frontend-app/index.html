@@ -29,13 +29,11 @@
 
     <main class="main">
 
-        <!-- Events -->
         <section id="page-events" class="page active">
             <h1 data-i18n="events_title">Événements disponibles</h1>
             <div id="events-list" data-i18n="events_loading">Chargement...</div>
         </section>
 
-        <!-- Buy -->
         <section id="page-buy" class="page">
             <a class="back" data-i18n="buy_back" onclick="showPage('events')">← Retour</a>
             <div id="buy-event-info" class="card"></div>
@@ -54,13 +52,11 @@
             </div>
         </section>
 
-        <!-- My tickets -->
         <section id="page-my-tickets" class="page">
             <h1 data-i18n="tickets_title">Mes billets</h1>
             <div id="tickets-list" data-i18n="tickets_login_required">Connectez-vous pour voir vos billets.</div>
         </section>
 
-        <!-- Login -->
         <section id="page-login" class="page">
             <div class="card">
                 <h2 data-i18n="login_title">Connexion</h2>
@@ -77,7 +73,6 @@
             </div>
         </section>
 
-        <!-- Register -->
         <section id="page-register" class="page">
             <div class="card">
                 <h2 data-i18n="register_title">Inscription</h2>
@@ -102,11 +97,9 @@
             </div>
         </section>
 
-        <!-- Admin -->
         <section id="page-admin" class="page">
             <h1 data-i18n="admin_title">Administration</h1>
 
-            <!-- Create event -->
             <div class="card">
                 <h2 data-i18n="admin_create_event_title">Créer un événement</h2>
                 <div id="admin-event-msg"></div>
@@ -119,19 +112,16 @@
                 <button class="btn-primary" data-i18n="admin_create_btn" onclick="adminCreateEvent()">Créer l'événement</button>
             </div>
 
-            <!-- Events list -->
             <div class="card">
                 <h2 data-i18n="admin_events_list_title">Tous les événements</h2>
                 <div id="admin-events-list" data-i18n="admin_events_loading">Chargement...</div>
             </div>
 
-            <!-- Users list (admin only) -->
             <div class="card" id="admin-users-section">
                 <h2 data-i18n="admin_users_title">Utilisateurs</h2>
                 <div id="admin-users-list" data-i18n="admin_users_loading">Chargement...</div>
             </div>
 
-            <!-- Search ticket by ID -->
             <div class="card">
                 <h2 data-i18n="admin_search_ticket_title">Chercher un billet</h2>
                 <div class="card-row" style="margin-bottom: 1rem;">
@@ -140,7 +130,6 @@
                 </div>
             </div>
 
-            <!-- Ticket search results -->
             <div id="admin-tickets-results-section" style="display:none">
                 <div class="card">
                     <div class="card-row">

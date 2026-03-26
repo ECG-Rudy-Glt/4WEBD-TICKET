@@ -1,4 +1,3 @@
-# test_resilience.ps1
 Write-Host "==========================================="
 Write-Host "   TEST DE RÉSILIENCE HAUTE DISPONIBILITÉ   "
 Write-Host "==========================================="

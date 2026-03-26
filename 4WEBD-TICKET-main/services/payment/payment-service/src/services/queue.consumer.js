@@ -41,14 +41,12 @@ export async function startConsumer() {
                 const payment = await processPayment(data);
 
                 if (payment.status === 'success') {
-                    // Met à jour le ticket → confirmed
                     await fetch(`${BOOKING_URL}/${data.ticketId}/status`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: 'confirmed', paymentId: payment.id })
                     });
 
-                    // Notifie le succès
                     if (notifChannel) {
                         notifChannel.sendToQueue(NOTIF_QUEUE, Buffer.from(JSON.stringify({
                             type:           'payment_success',
@@ -63,21 +61,18 @@ export async function startConsumer() {
                     }
 
                 } else {
-                    // Annule le ticket
                     await fetch(`${BOOKING_URL}/${data.ticketId}/status`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: 'cancelled' })
                     });
 
-                    // Restaure les places
                     await fetch(`${EVENT_URL}/${data.eventId}/capacity/restore`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ quantity: data.quantity })
                     });
 
-                    // Notifie l'échec
                     if (notifChannel) {
                         notifChannel.sendToQueue(NOTIF_QUEUE, Buffer.from(JSON.stringify({
                             type:          'payment_failed',

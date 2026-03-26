@@ -37,7 +37,7 @@ export async function getUserByEmail(email) {
     if (!res.rows.length) {
         throw { status: 404, message: "Utilisateur non trouvé" };
     }
-    return res.rows[0]; // password inclus — usage interne auth-service
+    return res.rows[0];
 }
 
 export async function getUserById(id) {

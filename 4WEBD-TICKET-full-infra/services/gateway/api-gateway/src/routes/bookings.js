@@ -18,7 +18,6 @@ router.post('/', requireAuth, async (req, res) => {
             return res.status(409).json({ error: "Plus assez de places disponibles" });
         }
 
-        // Extract userId from JWT if present
         let userId = null;
         let userEmail = null;
         const auth = req.headers['authorization'];

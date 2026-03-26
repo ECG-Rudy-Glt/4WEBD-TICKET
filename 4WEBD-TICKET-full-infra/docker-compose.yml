@@ -1,27 +1,5 @@
-# =============================================================
-# 4WEBD-TICKET — Docker Compose — Architecture complète
-#
-# Couches :
-#   Frontal     : 2x Nginx + 2x Frontend + 2x API Gateway
-#   App         : 6 services x 2 réplicas
-#   Proxy DB    : 6x PgBouncer (1 par silo)
-#   DB          : 2 silos critiques (Patroni HA 3 nœuds)
-#                 + 4 silos standards (Bitnami master/slave)
-#   Consensus   : 3x ETCD (pour Patroni)
-#   Msg & Cache : 1x RabbitMQ + 1x Redis
-#   Observabilité : 1x Zipkin
-#   Maintenance : 1x Cron Backup (payment)
-#
-# Point d'entrée : http://localhost (nginx frontal)
-# RabbitMQ UI     : http://localhost:15672
-# Zipkin UI       : http://localhost:9411
-# =============================================================
 
 services:
-
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 1 — FRONTAL (Nginx + Frontend)
-  # ═══════════════════════════════════════════════════════════
 
   nginx:
     build:
@@ -100,10 +78,6 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 3 — AUTH SERVICE (silo standard)
-  # ═══════════════════════════════════════════════════════════
-
   auth-service:
     build:
       context: ./services/auth/auth-service
@@ -127,10 +101,6 @@ services:
       user-lb:
         condition: service_started
     restart: unless-stopped
-
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 3 — USER SERVICE (silo standard)
-  # ═══════════════════════════════════════════════════════════
 
   user-service:
     build:
@@ -215,10 +185,6 @@ services:
     - user-pgreplica:/bitnami/postgresql
     restart: unless-stopped
 
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 3 — EVENT SERVICE (silo standard)
-  # ═══════════════════════════════════════════════════════════
-
   event-service:
     build:
       context: ./services/event/event-service
@@ -302,10 +268,6 @@ services:
     - event-pgreplica:/bitnami/postgresql
     restart: unless-stopped
 
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 3 — BOOKING SERVICE (silo critique — Patroni HA)
-  # ═══════════════════════════════════════════════════════════
-
   booking-service:
     build:
       context: ./services/booking/booking-service
@@ -368,7 +330,6 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # Patroni HA cluster — Booking (3 nœuds)
   booking-db-1:
     build:
       context: ./patroni
@@ -444,10 +405,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 3 — PAYMENT SERVICE (silo critique — Patroni HA)
-  # ═══════════════════════════════════════════════════════════
-
   payment-service:
     build:
       context: ./services/payment/payment-service
@@ -512,7 +469,6 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # Patroni HA cluster — Payment (3 nœuds)
   payment-db-1:
     build:
       context: ./patroni
@@ -587,10 +543,6 @@ services:
       etcd-3:
         condition: service_healthy
     restart: unless-stopped
-
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 3 — NOTIFICATION SERVICE (silo standard)
-  # ═══════════════════════════════════════════════════════════
 
   notification-service:
     build:
@@ -681,10 +633,6 @@ services:
     - notif-pgreplica:/bitnami/postgresql
     restart: unless-stopped
 
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 4 — ETCD CLUSTER (consensus pour Patroni)
-  # ═══════════════════════════════════════════════════════════
-
   etcd-1:
     image: bitnamilegacy/etcd:3.6.4-debian-12-r4
     environment:
@@ -751,10 +699,6 @@ services:
     - etcd-3-data:/bitnami/etcd
     restart: unless-stopped
 
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 5 — INFRASTRUCTURE PARTAGÉE
-  # ═══════════════════════════════════════════════════════════
-
   rabbitmq:
     image: rabbitmq:3.11-management
     ports:
@@ -778,19 +722,11 @@ services:
     - redisdata:/data
     restart: unless-stopped
 
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 6 — OBSERVABILITÉ
-  # ═══════════════════════════════════════════════════════════
-
   zipkin:
     image: openzipkin/zipkin:3
     ports:
     - "9411:9411"
     restart: unless-stopped
-
-  # ═══════════════════════════════════════════════════════════
-  # ZONE 7 — MAINTENANCE
-  # ═══════════════════════════════════════════════════════════
 
   cron-backup:
     build:
@@ -799,10 +735,6 @@ services:
       payment-pgbouncer:
         condition: service_started
     restart: unless-stopped
-
-# =============================================================
-# VOLUMES
-# =============================================================
 
   auth-lb:
     build: ./services/auth/lb
@@ -853,7 +785,6 @@ services:
     - api-gateway-replica
     restart: unless-stopped
 volumes:
-  # Standard silos (Bitnami master/slave)
 
   user-pgdata:
   user-pgreplica:
@@ -861,17 +792,14 @@ volumes:
   event-pgreplica:
   notif-pgdata:
   notif-pgreplica:
-  # Critical silos (Patroni 3 nœuds)
   booking-pgdata-1:
   booking-pgdata-2:
   booking-pgdata-3:
   payment-pgdata-1:
   payment-pgdata-2:
   payment-pgdata-3:
-  # ETCD
   etcd-1-data:
   etcd-2-data:
   etcd-3-data:
-  # Infrastructure
   rabbitmqdata:
   redisdata:

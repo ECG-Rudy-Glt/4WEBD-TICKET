@@ -12,7 +12,7 @@ import { swaggerSpec } from './swagger.js';
 
 const app = express();
 
-app.set('trust proxy', 1); // Allow rate limiting to work behind Nginx
+app.set('trust proxy', 1);
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
