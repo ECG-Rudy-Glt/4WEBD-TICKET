@@ -18,51 +18,8 @@ Ce projet répond spécifiquement aux besoins énoncés :
 
 Le système est découpé en services autonomes communiquant via REST (synchrone) et RabbitMQ (asynchrone).
 
-![Architecture](img/archi.png)
+![Architecture](img/schema-infra.png)
 
-```mermaid
-graph TD
-    User((Utilisateur)) --> N[Nginx Frontal]
-    
-    subgraph "Couche Présentation"
-        N --> FE[Frontend SPA]
-        N -- "/api" --> GWLB[Gateway LB]
-        GWLB --> GW[API Gateway Replicas]
-    end
-
-    subgraph "Load Balancers Internes (Nginx)"
-        GW --> ALB[Auth LB]
-        GW --> ULB[User LB]
-        GW --> ELB[Event LB]
-        GW --> BLB[Booking LB]
-    end
-
-    subgraph "Microservices"
-        ALB --> AS[Auth Service Replicas - Stateless JWT]
-        ULB --> US[User Service Replicas]
-        ELB --> ES[Event Service Replicas]
-        BLB --> BS[Booking Service Replicas]
-        GW --> PS[Payment Service]
-        GW --> NS[Notification Service]
-    end
-
-    subgraph "Persistance (Master/Replica)"
-        US --> UDB[(User DBs)]
-        ES --> EDB[(Event DBs)]
-        BS --> BDB[(Booking DBs)]
-        PS --> PDB[(Payment DBs)]
-        NS --> NDB[(Notif DBs)]
-    end
-
-    subgraph "Infrastructure"
-        RMQ[RabbitMQ]
-    end
-
-    %% Communication Asynchrone
-    BS -- "Event" --> RMQ
-    PS -- "Event" --> RMQ
-    RMQ -- "Consume" --> NS
-```
 
 ### Points Clés
 - **Réplication de Données** : Chaque service possède sa propre base de données PostgreSQL configurée avec un Master (écriture) et un Replica (lecture via WAL streaming).

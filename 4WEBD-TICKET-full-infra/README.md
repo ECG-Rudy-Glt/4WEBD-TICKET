@@ -18,58 +18,7 @@ L'architecture full-infra repose sur 46 conteneurs orchestrés pour offrir une d
 
 ## Schéma d'Architecture (Haute Disponibilité)
 
-```mermaid
-graph TD
-    User((Utilisateur)) --> N[Nginx Frontal]
-    
-    subgraph "Nœuds de Distribution"
-        N --> FE[Frontend SPA x2]
-        N -- "/api" --> GWLB[Gateway LB]
-        GWLB --> GW[API Gateway x2]
-    end
-
-    subgraph "Communication lnterne"
-        GW --> ALB[Auth LB]
-        GW --> ULB[User LB]
-        GW --> ELB[Event LB]
-        GW --> BLB[Booking LB]
-        GW --> PLB[Payment LB]
-    end
-
-    subgraph "Microservices Répliqués"
-        ALB --> AS[Auth Service Replicas - Stateless JWT]
-        ULB --> US[User Service Replicas]
-        ELB --> ES[Event Service Replicas]
-        BLB --> BS[Booking Service Replicas]
-        PLB --> PS[Payment Service Replicas]
-        GW -.-> NS[Notification Service]
-    end
-
-    subgraph "Gestion de Consensus"
-        ETCD{ETCD Cluster x3}
-    end
-
-    subgraph "Couche de Persistance Avancée"
-        subgraph "HA Silos (Booking/Payment)"
-            BS & PS --- PGB_HA[PgBouncer HA]
-            PGB_HA --- BDB[(Booking Cluster Patroni x3)]
-            PGB_HA --- PDB[(Payment Cluster Patroni x3)]
-            BDB & PDB --- ETCD
-        end
-        
-        subgraph "Standard Silos"
-            US & ES --- PGB_STD[PgBouncer Standard]
-            PGB_STD --- UDB[(User DB Master/Slave)]
-            PGB_STD --- EDB[(Event DB Master/Slave)]
-        end
-    end
-
-    subgraph "Infrastructure Partagée"
-        RMQ[RabbitMQ]
-        RED[Redis]
-        ZIP[Zipkin]
-    end
-```
+![Architecture](img/schema-archi.png)
 
 ## Justifications Techniques
 
